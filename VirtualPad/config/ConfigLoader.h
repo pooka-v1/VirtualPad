@@ -14,3 +14,12 @@ const ControllerConfig* findConfig(const std::vector<ControllerConfig>& configs,
 // Loads macro library from a JSON file (name -> execution string).
 // Returns an empty map if the file does not exist.
 std::unordered_map<std::string, std::string> loadMacroLibrary(const std::string& path);
+
+struct VirtualPadConfig {
+    uint16_t vid = 0x5650;   // defaults if file is missing
+    uint16_t pid = 0x0001;
+};
+
+// Loads virtual pad identity config from a JSON file.
+// Returns defaults if the file does not exist.
+VirtualPadConfig loadVirtualPadConfig(const std::string& path);

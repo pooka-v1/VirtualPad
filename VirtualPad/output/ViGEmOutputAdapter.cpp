@@ -2,7 +2,7 @@
 #include <iostream>
 #include <algorithm>
 
-ViGEmOutputAdapter::ViGEmOutputAdapter() {
+ViGEmOutputAdapter::ViGEmOutputAdapter(USHORT vid, USHORT pid) {
     // 1. Allocate a client handle (represents our connection to the driver)
     m_client = vigem_alloc();
     if (!m_client) {
@@ -21,8 +21,10 @@ ViGEmOutputAdapter::ViGEmOutputAdapter() {
         return;
     }
 
-    // 3. Allocate a virtual Xbox 360 target device
+    // 3. Allocate a virtual Xbox 360 target device and assign custom identity
     m_pad = vigem_target_x360_alloc();
+    vigem_target_set_vid(m_pad, vid);
+    vigem_target_set_pid(m_pad, pid);
 
     // 4. Plug it in — Windows will now see it as a connected Xbox 360 controller
     err = vigem_target_add(m_client, m_pad);

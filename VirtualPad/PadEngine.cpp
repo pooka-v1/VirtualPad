@@ -94,6 +94,15 @@ std::string PadEngine::getStatus() const {
     return m_status;
 }
 
+std::vector<PadScanner::DeviceInfo> PadEngine::getCandidates() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_candidates;
+}
+
+void PadEngine::selectDevice(UINT port) {
+    m_selectedPort.store(port);
+}
+
 void PadEngine::setDevice(const std::string& s) {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_device = s;
@@ -109,9 +118,9 @@ void PadEngine::setStatus(const std::string& s) {
 // ---------------------------------------------------------------------------
 
 void PadEngine::threadFunc() {
+    m_phase.store(EnginePhase::Scanning);
     setStatus("Scanning for devices...");
     std::cout << "\n=== VirtualPad — device init ===\n";
-    std::cout << "Scanning for joystick devices...\n";
 
     // --- Step 1: Find the real controller BEFORE creating the virtual one ---
     UINT     joyPort = UINT_MAX;
@@ -121,7 +130,6 @@ void PadEngine::threadFunc() {
         auto entries = scanPorts();
 
         if (entries.empty()) {
-            std::cout << "\rNo joystick found. Connect the controller in D-mode.    ";
             setStatus("No device found — connect controller");
             Sleep(500);
             continue;
@@ -130,22 +138,57 @@ void PadEngine::threadFunc() {
         if (entries.size() == 1) {
             selected = entries[0];
             joyPort  = selected.id;
-            printf("\nAuto-selected port %u: %ls (%u axes, %u buttons) [VID=%04X PID=%04X]\n",
-                joyPort, selected.name, selected.axes, selected.buttons,
-                selected.wMid, selected.wPid);
+            char narrow[MAXPNAMELEN];
+            WideCharToMultiByte(CP_UTF8, 0, selected.name, -1, narrow, sizeof(narrow), nullptr, nullptr);
+            printf("Auto-selected port %u: %s (%u axes, %u buttons) [VID=%04X PID=%04X]\n",
+                joyPort, narrow, selected.axes, selected.buttons, selected.wMid, selected.wPid);
+            setStatus(std::string("Auto-selected: ") + narrow);
         } else {
-            std::cout << "\nMultiple joystick devices found:\n";
+            // Build candidate list for the UI
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                m_candidates.clear();
+                for (auto& e : entries) {
+                    PadScanner::DeviceInfo d = {};
+                    d.port    = e.id;
+                    d.axes    = e.axes;
+                    d.buttons = e.buttons;
+                    d.vid     = e.wMid;
+                    d.pid     = e.wPid;
+                    wcsncpy_s(d.name, e.name, MAXPNAMELEN);
+                    m_candidates.push_back(d);
+                }
+            }
+            m_selectedPort.store(UINT_MAX);
+            m_phase.store(EnginePhase::WaitingSelection);
+            setStatus("Multiple controllers detected — select one in the Engine tab");
+
+            // Wait for UI to call selectDevice()
+            while (m_running && m_selectedPort.load() == UINT_MAX)
+                Sleep(50);
+
+            if (!m_running) return;
+
+            UINT picked = m_selectedPort.load();
             for (auto& e : entries)
-                printf("  Port %u: %ls (%u axes, %u buttons) [VID=%04X PID=%04X]\n",
-                    e.id, e.name, e.axes, e.buttons, e.wMid, e.wPid);
-            std::cout << "Enter port number: ";
-            std::cin >> joyPort;
-            for (auto& e : entries)
-                if (e.id == joyPort) { selected = e; break; }
+                if (e.id == picked) { selected = e; joyPort = picked; break; }
+
+            if (joyPort == UINT_MAX) {
+                // Selected port not in current list (device disappeared?) — re-scan
+                m_phase.store(EnginePhase::Scanning);
+                setStatus("Selected device not found — rescanning...");
+                continue;
+            }
+
+            char narrow[MAXPNAMELEN];
+            WideCharToMultiByte(CP_UTF8, 0, selected.name, -1, narrow, sizeof(narrow), nullptr, nullptr);
+            printf("User selected port %u: %s\n", joyPort, narrow);
         }
     }
 
     if (!m_running) return;
+
+    m_phase.store(EnginePhase::Configuring);
 
     // --- Step 2: Load controller config ---
     setStatus("Loading config...");
@@ -184,8 +227,19 @@ void PadEngine::threadFunc() {
     EightBitDoInputSource input(joyPort, *cfg);
 
     // --- Step 3: Initialize ViGEm after the real port is secured ---
+    // Load virtual pad identity (VID/PID) from config so the scanner can filter it out
+    VirtualPadConfig vpCfg;
+    try {
+        vpCfg = loadVirtualPadConfig("data/virtualpad.json");
+    } catch (const std::exception& ex) {
+        fprintf(stderr, "Warning: could not load virtualpad.json: %s — using defaults.\n", ex.what());
+    }
+    m_virtualVid.store(vpCfg.vid);
+    m_virtualPid.store(vpCfg.pid);
+    printf("[PadEngine] Virtual pad identity: VID:%04X PID:%04X\n", vpCfg.vid, vpCfg.pid);
+
     setStatus("Connecting to ViGEm...");
-    ViGEmOutputAdapter output;
+    ViGEmOutputAdapter output(vpCfg.vid, vpCfg.pid);
     LightningBot       bot;
     if (!output.isReady()) {
         std::cerr << "Aborting: could not create virtual pad.\n";
@@ -338,6 +392,7 @@ void PadEngine::threadFunc() {
     }
 
     m_connected = false;
+    m_phase.store(EnginePhase::Stopped);
     setStatus("Stopped");
     std::cout << "\n[PadEngine] thread stopped.\n";
 }

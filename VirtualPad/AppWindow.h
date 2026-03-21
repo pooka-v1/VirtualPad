@@ -4,6 +4,7 @@
 #include <vector>
 #include "PadEngine.h"
 #include "PadScanner.h"
+#include "config/ConfigLoader.h"
 
 // Manages the Win32 window, Direct3D 11 device, and ImGui context.
 // Call run() from the main thread — it blocks until the window is closed.
@@ -48,4 +49,8 @@ private:
     std::vector<PadScanner::DeviceInfo> m_scanDevices;
     int       m_scanSelected  = -1;   // index into m_scanDevices (-1 = none)
     ULONGLONG m_lastScanTime  = 0;    // tick of last auto-refresh
+    float     m_scanSplitX    = 340.0f; // width of the left (device list) panel
+
+    // --- Controller configs (for friendly name lookup in the scanner) ---
+    std::vector<ControllerConfig> m_controllerConfigs;
 };

@@ -11,7 +11,8 @@
 // The destructor cleanly unplugs and releases all resources.
 class ViGEmOutputAdapter {
 public:
-    ViGEmOutputAdapter();
+    // vid/pid: custom identity for the virtual pad (used to identify it in WinMM scans).
+    explicit ViGEmOutputAdapter(USHORT vid, USHORT pid);
     ~ViGEmOutputAdapter();
 
     // Returns true if the virtual pad was created and plugged in successfully.

@@ -7,88 +7,59 @@
 
 ## V1Pro3 — ~2026/03/03 — Base: lectura WinMM → virtualización ViGEm
 
-**Qué se hizo:**
-- Primer prototipo funcional: leer un mando físico y reemitirlo como Xbox 360 virtual.
-- Implementada la interfaz abstracta `IInputSource` (strategy pattern).
-- `EightBitDoInputSource`: lee joystick físico vía WinMM (`joyGetPosEx`), normaliza ejes y botones a `GamepadState`.
-- `GamepadState`: struct compartida que representa el estado normalizado del mando (sticks, triggers, botones, dpad).
-- `ViGEmOutputAdapter`: crea un pad virtual Xbox 360 via ViGEmBus y envía el estado cada tick.
-- Loop principal en consola: scan manual de puertos WinMM → lectura → forwarding → salida.
-
-**Hardware objetivo:** 8BitDo Pro 2/Pro 3 en modo D (DInput).
+- Primer prototipo funcional: WinMM → `GamepadState` → ViGEmBus.
+- `IInputSource` (strategy pattern), `EightBitDoInputSource`, `ViGEmOutputAdapter`.
+- Loop principal en consola. Hardware objetivo: 8BitDo Pro 2/Pro 3 D-mode.
 
 ---
 
 ## V2Pro3 — ~2026/03/04 — Configuración dinámica por VID/PID
 
-**Qué se hizo:**
-- `ConfigLoader`: carga mappings desde JSON (`configs/controllers.json`) en lugar de estar hardcodeados.
-- `ControllerConfig`: estructura de mapeos (ejes, triggers, botones) indexada por VID/PID del mando.
-- El scan de WinMM captura `wMid`/`wPid` para identificar qué mando está conectado.
-- Soporte para dos modos de dispositivo (`dinput` / `xinput`) en el JSON.
-- Introducción de `AxisMapping` y `TriggerMapping` como tipos de configuración.
-- Librería `nlohmann/json` añadida para parseo de JSON.
+- `ConfigLoader` + `ControllerConfig`: mappings desde JSON indexados por VID/PID.
+- Soporte `dinput` / `xinput`. Librería `nlohmann/json` añadida.
 
 ---
 
 ## V3Pro3 — ~2026/03/10 — Bot visual: LightningBot (FFX Thunder Plains)
 
-**Qué se hizo:**
-- `LightningBot`: bot especializado para esquivar rayos en Final Fantasy X (Thunder Plains).
-- Detecta flash lavanda en pantalla (brightness > umbral) monitorizando una región de la pantalla.
-- Thread dedicado: detect → wait → press (pulsa un botón del mando virtual al detectar el flash).
-- Contador de esquivas (`dodgeCount`).
-- La acción bot se dispara desde `ButtonActionType::Bot` en la config: un botón físico activa/desactiva el bot.
-
-**TriggerCount** (`tools/TriggerCount/`): herramienta de calibración desarrollada en paralelo.
-- Monitoriza flashes de pantalla (misma lógica que LightningBot) sin pulsar ningún botón.
-- Mide duración de la pulsación manual del botón A y la correlaciona con los flashes detectados.
-- Usada para calibrar los timings del LightningBot antes de automatizarlos.
-- No forma parte del producto final — es un utilitario de desarrollo/investigación.
+- `LightningBot`: detecta flash de pantalla en thread dedicado → pulsa botón virtual.
+- `tools/TriggerCount/`: herramienta de calibración de timings (correlaciona flashes con pulsaciones manuales). No forma parte del producto.
 
 ---
 
 ## V4Pro3 — ~2026/03/15 — Sistema de macros (consola pura, pre-GUI)
 
-**Qué se hizo:**
-- Motor de macros completo integrado en el loop de consola.
-- `MacroParser`: parsea un DSL compacto de texto a pasos compilados.
-- `Macro` + `CompiledStep`: cada paso tiene `startMs`, `holdMs`, `endMs`.
-- `MacroRepeatMode`: Once, TimedMs, UntilRelease, Toggle.
-- `LuluMacro`: macro especializada, rotación continua del stick derecho (~4 RPM) para el hechizo Lulu en FFX.
-- `tools/lulu_macro_tests.csv`: datos de calibración del timing de la rotación.
-
-**Estado:** aplicación de consola pura, sin GUI. Versión pre-refactor.
+- `MacroParser` + DSL compacto: secuencias, combos, holds, repeats, analógicos.
+- `LuluMacro`: rotación stick derecho ~4 RPM para FFX (7 vueltas conseguidas).
+- `tools/lulu_macro_tests.csv`: datos de calibración del timing.
+- Aplicación de consola pura, pre-refactor.
 
 ---
 
 ## V5Pro3 — ~2026/03/15 — Refactor: modularización en directorios
 
-**Qué se hizo:**
-- Reorganización en subdirectorios: `input/`, `output/`, `config/`, `bots/`, `macros/`.
-- En root solo quedan: `VirtualPad.cpp`, `GamepadState.h`, `.vcxproj`.
-- Refactor puro de estructura, sin cambios funcionales.
+- Fuentes reorganizados en `input/`, `output/`, `config/`, `bots/`, `macros/`.
+- Refactor puro, sin cambios funcionales.
 
 ---
 
 ## V6Pro3 — ~2026/03/15 — GUI con ImGui + threading (PadEngine / AppWindow)
 
-**Qué se hizo:**
-- Introducción de **Dear ImGui** (v1.92 WIP) con backend Win32 + Direct3D 11.
-- `PadEngine`: pipeline de lectura/macro/ViGEm en hilo de fondo (8ms tick). Accessors thread-safe.
-- `AppWindow`: hilo principal — ventana Win32, D3D11, ImGui.
-- `VirtualPad.cpp` queda en tres líneas.
-- Renombrado `configs/` → `data/`.
-- Primera versión con interfaz gráfica. Tabs: Engine / Scanner (básico).
+- Dear ImGui (Win32 + D3D11). `PadEngine` en hilo de fondo (8ms tick). `AppWindow` en hilo principal.
+- `VirtualPad.cpp` queda en tres líneas. `configs/` → `data/`.
 
 ---
 
 ## V7Pro3 — ~2026/03/15 — PadScanner: enumeración visual de mandos WinMM
 
+- `PadScanner`: enumera puertos WinMM y lee valores raw. Tab Scanner en ImGui.
+- Separación: PadScanner lee disponibles, PadEngine gestiona el activo.
+
+---
+
+## V8 — ~2026/03/17 — Consolidación + data/ + virtualpad.json + preparación dual-API
+
 **Qué se hizo:**
-- `PadScanner`: utilidad estática para enumerar todos los puertos WinMM conectados.
-- `DeviceInfo`: struct con `port`, `axes`, `buttons`, `vid`, `pid`, `name`.
-- `RawInput`: struct con todos los ejes raw (`xpos`, `ypos`, `zpos`, `rpos`, `upos`, `vpos`, `pov`, `buttons`).
-- Métodos: `PadScanner::scan()` y `PadScanner::readRaw(port)`.
-- La tab Scanner de ImGui muestra mandos detectados y sus valores raw en tiempo real.
-- Separación clara: PadScanner lee lo que hay en WinMM; PadEngine gestiona el mando activo.
+- Añadido `data/virtualpad.json`: VID/PID del mando virtual creado por ViGEm.
+- Preparación arquitectónica interna para soportar dos APIs de entrada (WinMM + HID) sin cambios de interfaz pública.
+- Estructura de archivos estable y definitiva para las versiones siguientes.

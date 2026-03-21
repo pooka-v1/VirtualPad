@@ -76,3 +76,15 @@ std::unordered_map<std::string, std::string> loadMacroLibrary(const std::string&
         result[name] = val.get<std::string>();
     return result;
 }
+
+VirtualPadConfig loadVirtualPadConfig(const std::string& path) {
+    VirtualPadConfig cfg;
+    std::ifstream f(path);
+    if (!f.is_open()) return cfg;  // optional file — return defaults
+    json root = json::parse(f);
+    if (root.contains("virtual_vid"))
+        cfg.vid = static_cast<uint16_t>(std::stoul(root["virtual_vid"].get<std::string>(), nullptr, 16));
+    if (root.contains("virtual_pid"))
+        cfg.pid = static_cast<uint16_t>(std::stoul(root["virtual_pid"].get<std::string>(), nullptr, 16));
+    return cfg;
+}

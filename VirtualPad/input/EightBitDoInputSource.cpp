@@ -65,10 +65,22 @@ bool EightBitDoInputSource::read(GamepadState& state) {
         else if (mapping.target == "left_y")  state.leftY  = v;
         else if (mapping.target == "right_x") state.rightX = v;
         else if (mapping.target == "right_y") state.rightY = v;
+        else if (mapping.target == "trigger_combined") {
+            // Shared axis: positive half → L2, negative half → R2
+            state.triggerL = (v > 0.0f) ?  v : 0.0f;
+            state.triggerR = (v < 0.0f) ? -v : 0.0f;
+        }
     }
 
     if (m_config.dpad == "pov")
         parsePOV(info.dwPOV, state.dpadUp, state.dpadDown, state.dpadLeft, state.dpadRight);
+
+    // If both digital triggers are pressed simultaneously, cancel each other out.
+    // (Mirrors the physical behavior of the shared Z-axis in X-mode.)
+    if (state.triggerL > 0.0f && state.triggerR > 0.0f) {
+        state.triggerL = 0.0f;
+        state.triggerR = 0.0f;
+    }
 
     return true;
 }

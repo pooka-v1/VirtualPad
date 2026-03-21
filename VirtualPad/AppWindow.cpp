@@ -1,5 +1,6 @@
 #include "AppWindow.h"
 
+#include <algorithm>
 #include <d3d11.h>
 #include <dxgi.h>
 #include <tchar.h>
@@ -53,6 +54,10 @@ int AppWindow::run() {
 
     ImGui_ImplWin32_Init(m_hwnd);
     ImGui_ImplDX11_Init(m_device, m_context);
+
+    try {
+        m_controllerConfigs = loadControllerConfigs("data/controllers.json");
+    } catch (...) {}   // optional — scanner falls back to WinMM names if missing
 
     m_engine.start();
 
@@ -130,10 +135,27 @@ void AppWindow::renderFrame() {
 void AppWindow::renderEngineTab() {
     ImGui::Spacing();
 
-    bool connected = m_engine.isConnected();
-    bool running   = m_engine.isRunning();
+    EnginePhase phase     = m_engine.getPhase();
+    bool        connected = m_engine.isConnected();
+    bool        running   = m_engine.isRunning();
 
-    if (connected) {
+    if (phase == EnginePhase::WaitingSelection) {
+        ImGui::TextColored({ 1.0f, 0.8f, 0.0f, 1.0f }, "●");
+        ImGui::SameLine();
+        ImGui::Text("Multiple controllers detected — select one:");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        auto candidates = m_engine.getCandidates();
+        for (const auto& dev : candidates) {
+            char label[256];
+            snprintf(label, sizeof(label), "[Port %u]  %ls    VID:%04X  PID:%04X    %u axes  %u buttons",
+                dev.port, dev.name, dev.vid, dev.pid, dev.axes, dev.buttons);
+            if (ImGui::Button(label))
+                m_engine.selectDevice(dev.port);
+        }
+    } else if (connected) {
         ImGui::TextColored({ 0.3f, 1.0f, 0.3f, 1.0f }, "●");
         ImGui::SameLine();
         ImGui::Text("Connected — %s", m_engine.getDevice().c_str());
@@ -256,9 +278,14 @@ static void drawPOVCompass(DWORD pov) {
 
 void AppWindow::renderScannerTab() {
     // Auto-refresh device list every second
-    ULONGLONG now = GetTickCount64();
+    ULONGLONG now        = GetTickCount64();
+    uint16_t  vVid       = m_engine.getVirtualVid();
+    uint16_t  vPid       = m_engine.getVirtualPid();
     if (now - m_lastScanTime > 1000) {
-        m_scanDevices  = PadScanner::scan();
+        auto all = PadScanner::scan();
+        m_scanDevices.clear();
+        for (auto& d : all)
+            if (!(vVid && d.vid == vVid && d.pid == vPid)) m_scanDevices.push_back(d);
         m_lastScanTime = now;
         if (m_scanSelected >= (int)m_scanDevices.size())
             m_scanSelected = -1;
@@ -266,14 +293,22 @@ void AppWindow::renderScannerTab() {
 
     ImGui::Spacing();
 
+    // ── Splitter ─────────────────────────────────────────────────────────
+    const float splitterW  = 6.0f;
+    const float minPanelW  = 120.0f;
+    float availW = ImGui::GetContentRegionAvail().x;
+    m_scanSplitX = std::clamp(m_scanSplitX, minPanelW, availW - minPanelW - splitterW);
+
     // ── Left panel: device list ──────────────────────────────────────────
-    float leftWidth = 340.0f;
-    ImGui::BeginChild("##DeviceList", { leftWidth, 0.0f }, true);
+    ImGui::BeginChild("##DeviceList", { m_scanSplitX, 0.0f }, true);
 
     ImGui::Text("Devices (%zu)", m_scanDevices.size());
     ImGui::SameLine();
     if (ImGui::SmallButton("Refresh")) {
-        m_scanDevices  = PadScanner::scan();
+        auto all = PadScanner::scan();
+        m_scanDevices.clear();
+        for (auto& d : all)
+            if (!(vVid && d.vid == vVid && d.pid == vPid)) m_scanDevices.push_back(d);
         m_lastScanTime = GetTickCount64();
         if (m_scanSelected >= (int)m_scanDevices.size())
             m_scanSelected = -1;
@@ -287,8 +322,12 @@ void AppWindow::renderScannerTab() {
     } else {
         for (int i = 0; i < (int)m_scanDevices.size(); ++i) {
             const auto& dev = m_scanDevices[i];
+            const ControllerConfig* cfg = findConfig(m_controllerConfigs, dev.vid, dev.pid);
             char label[128];
-            snprintf(label, sizeof(label), "[%u] %ls", dev.port, dev.name);
+            if (cfg)
+                snprintf(label, sizeof(label), "[%u] %s", dev.port, cfg->source_name.c_str());
+            else
+                snprintf(label, sizeof(label), "[%u] %ls", dev.port, dev.name);
 
             bool selected = (m_scanSelected == i);
             if (ImGui::Selectable(label, selected, 0, { 0, 0 }))
@@ -302,6 +341,14 @@ void AppWindow::renderScannerTab() {
     }
 
     ImGui::EndChild();
+
+    // ── Draggable splitter handle ─────────────────────────────────────────
+    ImGui::SameLine();
+    ImGui::InvisibleButton("##splitter", { splitterW, -1.0f });
+    if (ImGui::IsItemHovered())
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+    if (ImGui::IsItemActive())
+        m_scanSplitX += ImGui::GetIO().MouseDelta.x;
 
     ImGui::SameLine();
 
