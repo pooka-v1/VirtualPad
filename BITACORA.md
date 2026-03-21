@@ -5,69 +5,64 @@
 
 ---
 
-## V1Pro3 — ~2026/03/03 — Base: lectura WinMM → virtualización ViGEm
+## V1Pro3 — ~2026/03/03 — Base: WinMM → ViGEm
 
-- Primer prototipo funcional: WinMM → `GamepadState` → ViGEmBus.
-- `IInputSource` (strategy pattern), `EightBitDoInputSource`, `ViGEmOutputAdapter`.
-- Loop principal en consola. Hardware objetivo: 8BitDo Pro 2/Pro 3 D-mode.
+- Primer prototipo: `IInputSource`, `EightBitDoInputSource`, `ViGEmOutputAdapter`. Loop consola.
 
----
+## V2Pro3 — ~2026/03/04 — Config dinámica por VID/PID
 
-## V2Pro3 — ~2026/03/04 — Configuración dinámica por VID/PID
+- `ConfigLoader` + JSON. Modos `dinput` / `xinput`. `nlohmann/json`.
 
-- `ConfigLoader` + `ControllerConfig`: mappings desde JSON indexados por VID/PID.
-- Soporte `dinput` / `xinput`. Librería `nlohmann/json` añadida.
+## V3Pro3 — ~2026/03/10 — LightningBot (FFX Thunder Plains)
 
----
+- Bot de esquive de rayos por detección de flash de pantalla. `tools/TriggerCount/` (calibración, no es producto).
 
-## V3Pro3 — ~2026/03/10 — Bot visual: LightningBot (FFX Thunder Plains)
+## V4Pro3 — ~2026/03/15 — Sistema de macros (consola, pre-GUI)
 
-- `LightningBot`: detecta flash de pantalla en thread dedicado → pulsa botón virtual.
-- `tools/TriggerCount/`: herramienta de calibración de timings. No forma parte del producto.
+- DSL de macros: secuencias, combos, holds, analógicos. `LuluMacro`. `tools/lulu_macro_tests.csv`.
 
----
+## V5Pro3 — ~2026/03/15 — Refactor modular
 
-## V4Pro3 — ~2026/03/15 — Sistema de macros (consola pura, pre-GUI)
+- Fuentes en `input/`, `output/`, `config/`, `bots/`, `macros/`. Sin cambios funcionales.
 
-- `MacroParser` + DSL compacto: secuencias, combos, holds, repeats, analógicos.
-- `LuluMacro`: rotación stick derecho ~4 RPM para FFX (7 vueltas conseguidas).
-- `tools/lulu_macro_tests.csv`: datos de calibración del timing.
+## V6Pro3 — ~2026/03/15 — ImGui GUI + PadEngine threaded
 
----
+- Dear ImGui (Win32 + D3D11). PadEngine en hilo de fondo 8ms. `configs/` → `data/`.
 
-## V5Pro3 — ~2026/03/15 — Refactor: modularización en directorios
+## V7Pro3 — ~2026/03/15 — PadScanner visual
 
-- Fuentes reorganizados en `input/`, `output/`, `config/`, `bots/`, `macros/`.
+- PadScanner enumera WinMM, lee valores raw. Tab Scanner en ImGui.
 
----
+## V8 — ~2026/03/17 — data/ + virtualpad.json + prep dual-API
 
-## V6Pro3 — ~2026/03/15 — GUI con ImGui + threading (PadEngine / AppWindow)
+- `data/virtualpad.json`. Preparación interna para HID.
 
-- Dear ImGui (Win32 + D3D11). `PadEngine` en hilo de fondo (8ms tick). `configs/` → `data/`.
+## V9 — ~2026/03/18 — HIDInputSource + HIDScanner
+
+- HID raw input (overlapped). ValCaps para normalización. hid_brake/hid_accel analógicos. DeviceCandidate unifica WinMM+HID en PadEngine.
 
 ---
 
-## V7Pro3 — ~2026/03/15 — PadScanner: enumeración visual de mandos WinMM
-
-- `PadScanner`: enumera puertos WinMM, lee valores raw. Tab Scanner en ImGui.
-
----
-
-## V8 — ~2026/03/17 — Consolidación + data/ + virtualpad.json + preparación dual-API
-
-- `data/virtualpad.json`: VID/PID del mando virtual. Preparación interna para HID.
-
----
-
-## V9 — ~2026/03/18 — Soporte HID: HIDInputSource + HIDScanner + refactor PadEngine
+## V10 — ~2026/03/19 — Logging (spdlog) + HidHide integration (Fase B)
 
 **Qué se hizo:**
-- `HIDScanner` (`input/`): enumera dispositivos HID filtrando por usage page 0x01 (Joystick/Gamepad). Devuelve VID, PID, usage, device path y product name.
-- `HIDInputSource` (`input/`): lectura de mandos via HID API (ReadFile overlapped).
-  - HID preparsed data y ValCaps para normalización automática de ejes.
-  - Usages mapeados: hid_x, hid_y, hid_z, hid_rx, hid_ry, hid_rz, hid_brake (0xC4), hid_accel (0xC5).
-  - D-pad HAT switch parsing.
-  - Fix del Report ID mismatch del Pro 2 D-mode BT: si `HidP` falla con `INCOMPATIBLE_REPORT_ID`, swap temporal de `buf[0]` y retry.
-- **Refactor PadEngine**: nuevo `struct DeviceCandidate` que unifica WinMM y HID. `selectDevice(int index)` reemplaza `selectDevice(UINT port)`. `getCandidates()` reemplaza la lista WinMM pura.
-- Tab Scanner muestra dos secciones: dispositivos WinMM y dispositivos HID.
-- **Pro 2 D-mode**: funciona vía HID con gatillos analógicos reales (hid_brake→triggerR, hid_accel→triggerL).
+
+### Logging con spdlog
+- Librería `spdlog` añadida al proyecto (header-only).
+- `Log.h`: dos sinks — consola coloreada + fichero rotativo (`logs/virtualpad.log`, 1MB × 3 ficheros).
+- Nivel de log configurable en `data/virtualpad.json` → `"log_level": "debug"/"info"`.
+- `Log::init()` se llama en `main()` antes de crear PadEngine.
+- Niveles: debug (raw bytes, scan, ValCaps), info (eventos), warn (desconexiones), error (fallos driver).
+
+### HidHideClient (Fase B)
+- `HidHideClient` (`output/`): interfaz programática al driver kernel HidHide de Nefarius.
+- Al arrancar: añade VirtualPad.exe a la whitelist (idempotente).
+- Al tomar un mando: lo añade al blacklist + activa el filtro.
+- Al soltar/cerrar: lo quita del blacklist + desactiva el filtro (solo si nosotros lo activamos).
+- Si HidHide no instalado: `isAvailable()=false`, todo es no-op.
+- **Resultado**: Steam solo ve el mando virtual Xbox 360. El físico queda oculto.
+
+### Estado al cerrar
+- Cadena completa verificada: Pro 3 D-mode BT → VirtualPad → ViGEm → Steam ✓
+- Pro 3 X-mode ✓, Pro 2 X-mode ✓, Pro 2 D-mode ✓, F310 D-mode ✓ (en scanner).
+- Fases A1–A4 y B completadas.

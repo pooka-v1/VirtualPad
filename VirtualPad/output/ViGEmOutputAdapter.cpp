@@ -1,21 +1,20 @@
 #include "ViGEmOutputAdapter.h"
-#include <iostream>
+#include "../Log.h"
 #include <algorithm>
 
 ViGEmOutputAdapter::ViGEmOutputAdapter(USHORT vid, USHORT pid) {
     // 1. Allocate a client handle (represents our connection to the driver)
     m_client = vigem_alloc();
     if (!m_client) {
-        std::cerr << "[ViGEm] Failed to allocate client handle.\n";
+        spdlog::error("[ViGEm] Failed to allocate client handle.");
         return;
     }
 
     // 2. Connect to the ViGEmBus driver (must be installed on the system)
     VIGEM_ERROR err = vigem_connect(m_client);
     if (!VIGEM_SUCCESS(err)) {
-        std::cerr << "[ViGEm] Could not connect to driver (error 0x"
-                  << std::hex << err << std::dec << ").\n"
-                  << "        Is ViGEmBus installed and running?\n";
+        spdlog::error("[ViGEm] Could not connect to driver (error 0x{:08X}). Is ViGEmBus installed?",
+                      static_cast<unsigned>(err));
         vigem_free(m_client);
         m_client = nullptr;
         return;
@@ -29,8 +28,8 @@ ViGEmOutputAdapter::ViGEmOutputAdapter(USHORT vid, USHORT pid) {
     // 4. Plug it in — Windows will now see it as a connected Xbox 360 controller
     err = vigem_target_add(m_client, m_pad);
     if (!VIGEM_SUCCESS(err)) {
-        std::cerr << "[ViGEm] Failed to plug in virtual pad (error 0x"
-                  << std::hex << err << std::dec << ").\n";
+        spdlog::error("[ViGEm] Failed to plug in virtual pad (error 0x{:08X}).",
+                      static_cast<unsigned>(err));
         vigem_target_free(m_pad);
         m_pad = nullptr;
         vigem_disconnect(m_client);
@@ -40,7 +39,7 @@ ViGEmOutputAdapter::ViGEmOutputAdapter(USHORT vid, USHORT pid) {
     }
 
     m_ready = true;
-    std::cout << "[ViGEm] Virtual Xbox 360 controller plugged in.\n";
+    spdlog::info("[ViGEm] Virtual Xbox 360 controller plugged in.");
 }
 
 ViGEmOutputAdapter::~ViGEmOutputAdapter() {

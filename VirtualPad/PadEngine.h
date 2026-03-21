@@ -7,6 +7,7 @@
 #include <windows.h>
 #include "PadScanner.h"
 #include "GamepadState.h"
+#include "output/HidHideClient.h"
 
 // Unified description of a physical input device, regardless of API.
 // Built during the scan phase; used to create the right IInputSource.
@@ -75,6 +76,7 @@ private:
     std::atomic<uint16_t>    m_virtualPid    { 0 };
     std::vector<DeviceCandidate> m_candidates;   // protected by m_mutex
     GamepadState                 m_lastState;    // protected by m_mutex
+    HidHideClient                m_hidHide;
 
     void setDevice(const std::string& s);
     void setStatus(const std::string& s);

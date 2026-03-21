@@ -1,6 +1,6 @@
 #include "PadEngine.h"
+#include "Log.h"
 
-#include <iostream>
 #include <cmath>
 #include <memory>
 #include <windows.h>
@@ -129,7 +129,9 @@ void PadEngine::setStatus(const std::string& s) {
 void PadEngine::threadFunc() {
     m_phase.store(EnginePhase::Scanning);
     setStatus("Scanning for devices...");
-    std::cout << "\n=== VirtualPad — device init ===\n";
+    spdlog::info("=== VirtualPad — device init ===");
+
+    m_hidHide.addSelfToWhitelist();
 
     // --- Step 1: Load configs early so the scan can route devices correctly ---
     // (Devices with mode="hid" must use HIDInputSource even if they appear in WinMM,
@@ -138,7 +140,7 @@ void PadEngine::threadFunc() {
     try {
         configs = loadControllerConfigs("data/controllers.json");
     } catch (const std::exception& ex) {
-        std::cerr << "Error loading config: " << ex.what() << "\n";
+        spdlog::error("Error loading config: {}", ex.what());
         setStatus(std::string("Config error: ") + ex.what());
         m_running = false;
         return;
@@ -194,15 +196,15 @@ void PadEngine::threadFunc() {
             allCandidates.push_back(c);
         }
 
-        printf("[Scan] WinMM: %zu entries, HID: %zu entries, Candidates: %zu\n",
+        spdlog::debug("[Scan] WinMM: {} entries, HID: {} entries, Candidates: {}",
                winmmEntries.size(), hidEntries.size(), allCandidates.size());
         for (auto& h : hidEntries)
-            printf("[HID found] VID:%04X PID:%04X '%s' path=%s\n",
-                   h.vid, h.pid, h.productName.c_str(), h.path.c_str());
+            spdlog::debug("[HID found] VID:{:04X} PID:{:04X} '{}' path={}",
+                   h.vid, h.pid, h.productName, h.path);
         for (auto& c : allCandidates)
-            printf("[Candidate] [%s] VID:%04X PID:%04X '%s'\n",
+            spdlog::debug("[Candidate] [{}] VID:{:04X} PID:{:04X} '{}'",
                    c.source == DeviceCandidate::Source::HID ? "HID" : "WinMM",
-                   c.vid, c.pid, c.name.c_str());
+                   c.vid, c.pid, c.name);
 
         if (allCandidates.empty()) {
             setStatus("No device found — connect controller");
@@ -212,9 +214,9 @@ void PadEngine::threadFunc() {
 
         if (allCandidates.size() == 1) {
             selected = allCandidates[0];
-            printf("Auto-selected [%s]: %s [VID=%04X PID=%04X]\n",
+            spdlog::info("Auto-selected [{}]: {} [VID={:04X} PID={:04X}]",
                 selected.source == DeviceCandidate::Source::HID ? "HID" : "WinMM",
-                selected.name.c_str(), selected.vid, selected.pid);
+                selected.name, selected.vid, selected.pid);
             setStatus(std::string("Auto-selected: ") + selected.name);
         } else {
             // Multiple devices — ask the user
@@ -238,9 +240,9 @@ void PadEngine::threadFunc() {
                 continue;
             }
             selected = allCandidates[idx];
-            printf("User selected [%s]: %s [VID=%04X PID=%04X]\n",
+            spdlog::info("User selected [{}]: {} [VID={:04X} PID={:04X}]",
                 selected.source == DeviceCandidate::Source::HID ? "HID" : "WinMM",
-                selected.name.c_str(), selected.vid, selected.pid);
+                selected.name, selected.vid, selected.pid);
         }
     }
 
@@ -256,20 +258,18 @@ void PadEngine::threadFunc() {
         if (!macroLibrary.empty())
             printf("Macro library loaded: %zu macros.\n", macroLibrary.size());
     } catch (const std::exception& ex) {
-        fprintf(stderr, "Warning: could not load macro library: %s\n", ex.what());
+        spdlog::warn("Could not load macro library: {}", ex.what());
     }
 
     const ControllerConfig* cfg = findConfig(configs, selected.vid, selected.pid);
     if (!cfg) {
-        fprintf(stderr,
-            "No config found for VID=%04X PID=%04X (%s).\n"
-            "Add an entry to data/controllers.json and restart.\n",
-            selected.vid, selected.pid, selected.name.c_str());
+        spdlog::error("No config found for VID={:04X} PID={:04X} ({}). Add an entry to data/controllers.json and restart.",
+            selected.vid, selected.pid, selected.name);
         setStatus("No config for this device");
         m_running = false;
         return;
     }
-    printf("Config loaded: %s\n", cfg->source_name.c_str());
+    spdlog::info("Config loaded: {}", cfg->source_name);
     setDevice(cfg->source_name);
 
     // --- Factory: pick the right IInputSource based on the config mode ---
@@ -280,11 +280,13 @@ void PadEngine::threadFunc() {
         input = std::make_unique<EightBitDoInputSource>(selected.port, *cfg);
     }
     if (!input->isConnected()) {
-        fprintf(stderr, "Failed to open input device.\n");
+        spdlog::error("Failed to open input device.");
         setStatus("Failed to open input device");
         m_running = false;
         return;
     }
+
+    m_hidHide.hideDevice(selected.vid, selected.pid);
 
     // --- Step 3: Initialize ViGEm after the real port is secured ---
     // Load virtual pad identity (VID/PID) from config so the scanner can filter it out
@@ -292,17 +294,17 @@ void PadEngine::threadFunc() {
     try {
         vpCfg = loadVirtualPadConfig("data/virtualpad.json");
     } catch (const std::exception& ex) {
-        fprintf(stderr, "Warning: could not load virtualpad.json: %s — using defaults.\n", ex.what());
+        spdlog::warn("Could not load virtualpad.json: {} — using defaults.", ex.what());
     }
     m_virtualVid.store(vpCfg.vid);
     m_virtualPid.store(vpCfg.pid);
-    printf("[PadEngine] Virtual pad identity: VID:%04X PID:%04X\n", vpCfg.vid, vpCfg.pid);
+    spdlog::debug("[PadEngine] Virtual pad identity: VID:{:04X} PID:{:04X}", vpCfg.vid, vpCfg.pid);
 
     setStatus("Connecting to ViGEm...");
     ViGEmOutputAdapter output(vpCfg.vid, vpCfg.pid);
     LightningBot       bot;
     if (!output.isReady()) {
-        std::cerr << "Aborting: could not create virtual pad.\n";
+        spdlog::error("Aborting: could not create virtual pad.");
         setStatus("ViGEm error — is the driver installed?");
         m_running = false;
         return;
@@ -310,7 +312,7 @@ void PadEngine::threadFunc() {
 
     int lightningBotBit = findBotBit(*cfg, "LightningBot");
     if (lightningBotBit > 0)
-        printf("LightningBot assigned to button %d.\n", lightningBotBit);
+        spdlog::info("LightningBot assigned to button {}.", lightningBotBit);
 
     // --- Step 4: Parse macros ---
     std::unordered_map<int, Macro>       macros;
@@ -326,8 +328,7 @@ void PadEngine::threadFunc() {
         if (execution.empty()) {
             auto it = macroLibrary.find(action.name);
             if (it == macroLibrary.end()) {
-                fprintf(stderr, "Warning: macro '%s' (button %d) not found in library — skipped.\n",
-                        action.name.c_str(), bit);
+                spdlog::warn("Macro '{}' (button {}) not found in library — skipped.", action.name, bit);
                 continue;
             }
             execution = it->second;
@@ -341,16 +342,16 @@ void PadEngine::threadFunc() {
             macroRotCount[bit] = 0;
             macroLastRX[bit]   = 0.0f;
             macroLastRY[bit]   = 0.0f;
-            printf("Macro '%s' assigned to button %d.\n", action.name.c_str(), bit);
+            spdlog::info("Macro '{}' assigned to button {}.", action.name, bit);
         } catch (const std::exception& ex) {
-            fprintf(stderr, "Error parsing macro '%s': %s\n", action.name.c_str(), ex.what());
+            spdlog::error("Error parsing macro '{}': {}", action.name, ex.what());
         }
     }
 
     // --- Main loop ---
     setStatus("Running");
     m_connected = true;
-    std::cout << "Forwarding input. Close the window to exit.\n\n";
+    spdlog::info("Forwarding input. Close the window to exit.");
 
     GamepadState state;
     bool         botBtnPrev = false;
@@ -359,7 +360,7 @@ void PadEngine::threadFunc() {
     while (m_running) {
         if (!input->isConnected()) {
             if (m_connected) {
-                printf("\r[%s] disconnected. Waiting...    ", cfg->source_name.c_str());
+                spdlog::warn("[{}] disconnected. Waiting...", cfg->source_name);
                 m_connected = false;
                 setStatus("Device disconnected — waiting...");
             }
@@ -381,7 +382,7 @@ void PadEngine::threadFunc() {
                 bool pressed = (btns & (1u << (lightningBotBit - 1))) != 0;
                 if (pressed && !botBtnPrev) {
                     bot.toggle();
-                    printf("\n[BOT] Lightning bot %s\n", bot.isActive() ? "ON" : "OFF");
+                    spdlog::info("[BOT] Lightning bot {}", bot.isActive() ? "ON" : "OFF");
                 }
                 botBtnPrev = pressed;
             }
@@ -400,8 +401,7 @@ void PadEngine::threadFunc() {
                         macroLastRX[bit]   = 0.0f;
                         macroLastRY[bit]   = 0.0f;
                     }
-                    printf("\n[MACRO][%llu] '%s' %s\n",
-                           GetTickCount64(), macroNames[bit].c_str(),
+                    spdlog::info("[MACRO][{}] '{}' {}", GetTickCount64(), macroNames[bit],
                            macro.isActive() ? "ON" : "OFF");
                 }
                 if (!pressed && prev)
@@ -411,7 +411,7 @@ void PadEngine::threadFunc() {
             }
 
             if (state.btnA && !btnAPrev)
-                printf("\n[MAN][%llu] Manual A press\n", GetTickCount64());
+                spdlog::info("[MAN][{}] Manual A press", GetTickCount64()); // TODO: remove when no longer needed
             btnAPrev = state.btnA;
 
             bool botPressed = bot.consumePressA();
@@ -427,16 +427,14 @@ void PadEngine::threadFunc() {
                     bool wasAtNorth = (fabsf(macroLastRX[bit]) < 0.1f && macroLastRY[bit] > 0.9f);
                     if (atNorth && !wasAtNorth) {
                         macroRotCount[bit]++;
-                        printf("[MACRO][%llu] '%s' lap=%d\n",
-                               GetTickCount64(), macroNames[bit].c_str(), macroRotCount[bit]);
+                        spdlog::debug("[MACRO][{}] '{}' lap={}", GetTickCount64(), macroNames[bit], macroRotCount[bit]);
                     }
                     macroLastRX[bit] = state.rightX;
                     macroLastRY[bit] = state.rightY;
                 }
 
                 if (wasActive && !macro.isActive())
-                    printf("\n[MACRO][%llu] '%s' AUTO-OFF (laps: %d)\n",
-                           GetTickCount64(), macroNames[bit].c_str(), macroRotCount[bit]);
+                    spdlog::info("[MACRO][{}] '{}' AUTO-OFF (laps: {})", GetTickCount64(), macroNames[bit], macroRotCount[bit]);
             }
 
             output.update(state);
@@ -445,8 +443,9 @@ void PadEngine::threadFunc() {
         Sleep(8);
     }
 
+    m_hidHide.unhideDevice();
     m_connected = false;
     m_phase.store(EnginePhase::Stopped);
     setStatus("Stopped");
-    std::cout << "\n[PadEngine] thread stopped.\n";
+    spdlog::info("[PadEngine] thread stopped.");
 }

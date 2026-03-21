@@ -86,5 +86,7 @@ VirtualPadConfig loadVirtualPadConfig(const std::string& path) {
         cfg.vid = static_cast<uint16_t>(std::stoul(root["virtual_vid"].get<std::string>(), nullptr, 16));
     if (root.contains("virtual_pid"))
         cfg.pid = static_cast<uint16_t>(std::stoul(root["virtual_pid"].get<std::string>(), nullptr, 16));
+    if (root.contains("log_level"))
+        cfg.logLevel = root["log_level"].get<std::string>();
     return cfg;
 }

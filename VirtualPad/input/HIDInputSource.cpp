@@ -1,8 +1,8 @@
 #include "HIDInputSource.h"
 #include "../GamepadState.h"
+#include "../Log.h"
 #include <hidsdi.h>
 #include <algorithm>
-#include <cstdio>
 #include <vector>
 
 #pragma comment(lib, "hid.lib")
@@ -43,7 +43,7 @@ HIDInputSource::HIDInputSource(const std::string& devicePath, const ControllerCo
         nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr);
 
     if (m_device == INVALID_HANDLE_VALUE) {
-        fprintf(stderr, "[HID] Failed to open device (error %lu)\n", GetLastError());
+        spdlog::error("[HID] Failed to open device (error {})", GetLastError());
         return;
     }
 
@@ -56,7 +56,7 @@ HIDInputSource::HIDInputSource(const std::string& devicePath, const ControllerCo
     // Get preparsed data and store as void* (hidsdi.h stays out of the header)
     PHIDP_PREPARSED_DATA preparsed = nullptr;
     if (!HidD_GetPreparsedData(m_device, &preparsed)) {
-        fprintf(stderr, "[HID] Failed to get preparsed data\n");
+        spdlog::error("[HID] Failed to get preparsed data");
         CloseHandle(m_event);  m_event  = nullptr;
         CloseHandle(m_device); m_device = INVALID_HANDLE_VALUE;
         return;
@@ -88,19 +88,19 @@ HIDInputSource::HIDInputSource(const std::string& devicePath, const ControllerCo
 
     // Find report ID used for buttons (may differ from the report ID the device sends)
     USHORT numBtnCaps = caps.NumberInputButtonCaps;
-    printf("[HID] Opened: %s  ReportLen=%u  ValueCaps=%u  BtnCaps=%u\n",
-        m_name.c_str(), m_inputReportLen, numCaps, numBtnCaps);
+    spdlog::info("[HID] Opened: {}  ReportLen={}  ValueCaps={}  BtnCaps={}",
+        m_name, m_inputReportLen, numCaps, numBtnCaps);
     if (numBtnCaps > 0) {
         std::vector<HIDP_BUTTON_CAPS> btnCaps(numBtnCaps);
         if (HidP_GetButtonCaps(HidP_Input, btnCaps.data(), &numBtnCaps, PREPARSED) == HIDP_STATUS_SUCCESS && numBtnCaps > 0) {
             m_buttonReportId = btnCaps[0].ReportID;
-            printf("[HID] Button ReportID in descriptor: %u\n", m_buttonReportId);
+            spdlog::debug("[HID] Button ReportID in descriptor: {}", m_buttonReportId);
         }
     }
     // Log value cap report IDs for diagnosis
     for (USHORT ci = 0; ci < numCaps; ++ci) {
         if (!valueCaps[ci].IsRange)
-            printf("[HID] ValCap: ReportID=%u Page=0x%02X Usage=0x%02X range=[%d,%d]\n",
+            spdlog::debug("[HID] ValCap: ReportID={} Page=0x{:02X} Usage=0x{:02X} range=[{},{}]",
                 valueCaps[ci].ReportID, valueCaps[ci].UsagePage,
                 valueCaps[ci].NotRange.Usage,
                 valueCaps[ci].LogicalMin, valueCaps[ci].LogicalMax);
@@ -156,18 +156,21 @@ bool HIDInputSource::read(GamepadState& state) {
     applyButtons(buf, bufLen, state);
     applyAxes   (buf, bufLen, state);
 
-    // Diagnostic: print state + raw bytes every ~2 seconds (240 reads * 8ms = ~2s)
+    // Diagnostic: log state + raw bytes every ~2 seconds (240 reads * 8ms = ~2s)
     if (++m_readCount % 240 == 0) {
-        printf("[HID][%s] lx=%.2f ly=%.2f rx=%.2f ry=%.2f tL=%.2f tR=%.2f btns=%08X\n",
-               m_name.c_str(),
+        spdlog::debug("[HID][{}] lx={:.2f} ly={:.2f} rx={:.2f} ry={:.2f} tL={:.2f} tR={:.2f} btns={:08X}",
+               m_name,
                state.leftX, state.leftY, state.rightX, state.rightY,
                state.triggerL, state.triggerR, m_lastButtonMask);
-        // Raw bytes dump (first 16)
         ULONG dumpLen = (m_inputReportLen < 16) ? m_inputReportLen : 16;
-        printf("[HID][raw] ");
-        for (ULONG i = 0; i < dumpLen; ++i)
-            printf("%02X ", (unsigned char)m_reportBuf[i]);
-        printf("\n");
+        std::string raw;
+        raw.reserve(dumpLen * 3);
+        for (ULONG i = 0; i < dumpLen; ++i) {
+            char tmp[4];
+            snprintf(tmp, sizeof(tmp), "%02X ", (unsigned char)m_reportBuf[i]);
+            raw += tmp;
+        }
+        spdlog::debug("[HID][raw] {}", raw);
     }
 
     if (m_config.dpad == "hid_hat") {
@@ -209,8 +212,8 @@ void HIDInputSource::applyButtons(PCHAR buf, ULONG bufLen, GamepadState& state) 
 
     if (btnStatus != HIDP_STATUS_SUCCESS) {
         if (++m_btnErrCount <= 3)
-            printf("[HID] HidP_GetUsages failed: 0x%08lX (count=%lu)\n",
-                   (unsigned long)btnStatus, (unsigned long)usageCount);
+            spdlog::warn("[HID] HidP_GetUsages failed: 0x{:08X} (count={})",
+                         static_cast<unsigned>(btnStatus), usageCount);
         return;
     }
 
