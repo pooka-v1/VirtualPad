@@ -76,3 +76,15 @@
 - En root solo quedan: `VirtualPad.cpp`, `GamepadState.h`, `.vcxproj`.
 - Los includes se actualizan a rutas relativas.
 - No se añade funcionalidad nueva: es un refactor puro de estructura.
+
+---
+
+## V6Pro3 — ~2026/03/15 — GUI con ImGui + threading (PadEngine / AppWindow)
+
+**Qué se hizo:**
+- Introducción de **Dear ImGui** (v1.92 WIP) con backend Win32 + Direct3D 11.
+- `PadEngine`: el pipeline de lectura/macro/ViGEm se mueve a un hilo de fondo (8ms tick). Expone accessors thread-safe: `isRunning()`, `isConnected()`, `getDevice()`, `getStatus()`.
+- `AppWindow`: hilo principal maneja ventana Win32, D3D11 (device, context, swapchain, render target), contexto ImGui y WndProc estático.
+- `VirtualPad.cpp` queda en tres líneas: `Log::init()` → `PadEngine engine` → `AppWindow window(engine)` → `window.run()`.
+- Renombrado `configs/` → `data/`: los JSON de configuración pasan a `data/controllers.json`, `data/macros.json`.
+- Primera versión con interfaz gráfica visible. Tabs: Engine / Scanner (aún básico).

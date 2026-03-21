@@ -2,24 +2,27 @@
 
 Lee mandos físicos (WinMM) y los reenvía como un mando Xbox 360 virtual via ViGEm.
 Soporta macros, bots y configuración por JSON sin tocar el código.
+Interfaz gráfica con Dear ImGui (Win32 + DirectX 11).
 
 ---
 
 ## Requisitos
 
+### Para ejecutar
+
 | Dependencia | Motivo |
 |---|---|
-| Windows 10/11 | API requeridas: WinMM |
+| Windows 10/11 | API requeridas: WinMM, DirectX 11 |
 | [ViGEmBus driver](https://github.com/nefarius/ViGEmBus/releases) | Crea el mando Xbox 360 virtual |
 
 ### Para compilar
 
 - Visual Studio 2022 (con soporte C++17 y Windows SDK)
-- `nlohmann/json` incluido en el repositorio
+- `nlohmann/json` e `imgui/` incluidos en el repositorio
 
 ---
 
-## Configurar un mando — `configs/controllers.json`
+## Configurar un mando — `data/controllers.json`
 
 Cada entrada describe un mando físico identificado por **VID y PID**.
 
@@ -34,8 +37,6 @@ Cada entrada describe un mando físico identificado por **VID y PID**.
   "dpad": "pov"
 }
 ```
-
-El campo `"mode"` determina qué API se usa:
 
 | mode | API | Cuándo usarlo |
 |---|---|---|
@@ -57,20 +58,19 @@ Ver [MACROS.md](MACROS.md) para la sintaxis completa de macros.
 
 ---
 
-## Bots incluidos
+## Arquitectura
 
-### LightningBot (Final Fantasy X — Thunder Plains)
-Detecta el flash de pantalla del rayo y pulsa automáticamente el botón asignado para esquivar.
-Se activa/desactiva con un botón físico definido en la config.
+| Componente | Rol |
+|---|---|
+| `PadEngine` | Hilo de fondo: scan → config → macro/bot → ViGEm (tick 8ms) |
+| `AppWindow` | Hilo principal: ventana Win32 + D3D11 + ImGui |
+| `VirtualPad.cpp` | Entry point: init → engine → window |
 
 ---
 
-## Botones virtuales disponibles
+## Archivos de datos
 
-| Valor | Botón virtual |
+| Archivo | Descripción |
 |---|---|
-| `"a"` / `"b"` / `"x"` / `"y"` | Cara |
-| `"l1"` / `"r1"` | Bumpers |
-| `"select"` / `"start"` | Back / Start |
-| `"l3"` / `"r3"` | Click sticks |
-| `{ "type": "trigger", "target": "l2" }` | Gatillo digital |
+| `data/controllers.json` | Configuración base de mandos físicos |
+| `data/macros.json` | Biblioteca de macros reutilizables |

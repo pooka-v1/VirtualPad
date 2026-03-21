@@ -21,7 +21,7 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{641B8EEF-CF78-41D2-AF64-DBE8E63A18DE}</ProjectGuid>
+    <ProjectGuid>{7418B0B5-F59D-470B-9C55-10A11DFBFE1D}</ProjectGuid>
     <RootNamespace>VirtualPad</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
@@ -140,7 +140,15 @@
     <ClCompile Include="macros\Macro.cpp" />
     <ClCompile Include="macros\MacroParser.cpp" />
     <ClCompile Include="output\ViGEmOutputAdapter.cpp" />
+    <ClCompile Include="PadEngine.cpp" />
+    <ClCompile Include="AppWindow.cpp" />
     <ClCompile Include="VirtualPad.cpp" />
+    <ClCompile Include="imgui\imgui.cpp" />
+    <ClCompile Include="imgui\imgui_draw.cpp" />
+    <ClCompile Include="imgui\imgui_tables.cpp" />
+    <ClCompile Include="imgui\imgui_widgets.cpp" />
+    <ClCompile Include="imgui\imgui_impl_win32.cpp" />
+    <ClCompile Include="imgui\imgui_impl_dx11.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="config\ConfigLoader.h" />
@@ -152,6 +160,12 @@
     <ClInclude Include="macros\Macro.h" />
     <ClInclude Include="macros\MacroParser.h" />
     <ClInclude Include="output\ViGEmOutputAdapter.h" />
+    <ClInclude Include="PadEngine.h" />
+    <ClInclude Include="AppWindow.h" />
+    <ClInclude Include="imgui\imgui.h" />
+    <ClInclude Include="imgui\imgui_internal.h" />
+    <ClInclude Include="imgui\imgui_impl_win32.h" />
+    <ClInclude Include="imgui\imgui_impl_dx11.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
