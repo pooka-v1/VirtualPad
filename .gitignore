@@ -3,3 +3,7 @@ x64/
 *.user
 VirtualPad/logs/
 VirtualPad/consoleOutput/
+
+# Private working documents
+BITACORA.md
+SESSION_CONTEXT.md
