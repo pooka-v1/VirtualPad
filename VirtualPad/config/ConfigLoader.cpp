@@ -5,6 +5,47 @@
 
 using json = nlohmann::json;
 
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+static ButtonAction parseButtonAction(const json& val) {
+    ButtonAction action;
+    if (val.is_string()) {
+        action.type = ButtonActionType::VirtualButton;
+        action.name = val.get<std::string>();
+    } else {
+        std::string type = val.at("type").get<std::string>();
+        if (type == "bot") {
+            action.type = ButtonActionType::Bot;
+            action.name = val.at("name").get<std::string>();
+        } else if (type == "macro") {
+            action.type = ButtonActionType::Macro;
+            action.name = val.at("name").get<std::string>();
+            if (val.contains("execution"))
+                action.execution = val["execution"].get<std::string>();
+        } else if (type == "trigger") {
+            action.type   = ButtonActionType::Trigger;
+            action.target = val.at("target").get<std::string>();
+            if (val.contains("axis")) action.axis = val["axis"].get<std::string>();
+        }
+    }
+    return action;
+}
+
+// Parses a buttons JSON object into a map.
+// Keys starting with '_' are skipped (they are pseudo-comments).
+static std::unordered_map<int, ButtonAction> parseButtonsJson(const json& buttonsJson) {
+    std::unordered_map<int, ButtonAction> result;
+    for (const auto& [key, val] : buttonsJson.items()) {
+        if (!key.empty() && key[0] == '_') continue;
+        result[std::stoi(key)] = parseButtonAction(val);
+    }
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+
 std::vector<ControllerConfig> loadControllerConfigs(const std::string& path) {
     std::ifstream f(path);
     if (!f.is_open())
@@ -20,31 +61,7 @@ std::vector<ControllerConfig> loadControllerConfigs(const std::string& path) {
         cfg.source_name = c.at("source_name").get<std::string>();
         cfg.mode        = c.at("mode").get<std::string>();
         cfg.dpad        = c.value("dpad", "");
-
-        for (const auto& [key, val] : c.at("buttons").items()) {
-            int          bit = std::stoi(key);
-            ButtonAction action;
-            if (val.is_string()) {
-                action.type = ButtonActionType::VirtualButton;
-                action.name = val.get<std::string>();
-            } else {
-                std::string type = val.at("type").get<std::string>();
-                if (type == "bot") {
-                    action.type = ButtonActionType::Bot;
-                    action.name = val.at("name").get<std::string>();
-                } else if (type == "macro") {
-                    action.type      = ButtonActionType::Macro;
-                    action.name      = val.at("name").get<std::string>();
-                    if (val.contains("execution"))
-                        action.execution = val["execution"].get<std::string>();
-                } else if (type == "trigger") {
-                    action.type   = ButtonActionType::Trigger;
-                    action.target = val.at("target").get<std::string>();
-                    if (val.contains("axis")) action.axis = val["axis"].get<std::string>();
-                }
-            }
-            cfg.buttons[bit] = action;
-        }
+        cfg.buttons     = parseButtonsJson(c.at("buttons"));
 
         for (const auto& [source, axisJson] : c.at("axes").items()) {
             AxisMapping m;
@@ -89,4 +106,33 @@ VirtualPadConfig loadVirtualPadConfig(const std::string& path) {
     if (root.contains("log_level"))
         cfg.logLevel = root["log_level"].get<std::string>();
     return cfg;
+}
+
+GameProfile loadGameProfile(const std::string& path) {
+    GameProfile profile;
+    std::ifstream f(path);
+    if (!f.is_open()) return profile;
+
+    json root = json::parse(f);
+    profile.profile_name = root.value("profile_name", "");
+
+    for (const auto& ov : root.value("overrides", json::array())) {
+        GameProfile::Override o;
+        o.vid = static_cast<uint16_t>(std::stoul(ov.at("vid").get<std::string>(), nullptr, 16));
+        o.pid = static_cast<uint16_t>(std::stoul(ov.at("pid").get<std::string>(), nullptr, 16));
+        if (ov.contains("buttons"))
+            o.buttons = parseButtonsJson(ov.at("buttons"));
+        profile.overrides.push_back(std::move(o));
+    }
+    return profile;
+}
+
+ControllerConfig applyProfile(const ControllerConfig& base, const GameProfile& profile) {
+    ControllerConfig result = base;
+    for (const auto& ov : profile.overrides) {
+        if (ov.vid != base.vid || ov.pid != base.pid) continue;
+        for (const auto& [bit, action] : ov.buttons)
+            result.buttons[bit] = action;
+    }
+    return result;
 }

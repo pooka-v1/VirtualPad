@@ -21,6 +21,7 @@ public:
     bool        read(GamepadState& state) override;
     const char* getName()           const override { return m_name.c_str(); }
     DWORD       getLastButtonMask() const override { return m_lastButtonMask; }
+    void        setConfig(const ControllerConfig& cfg) override { m_config = cfg; }
 
 private:
     HANDLE           m_device         = INVALID_HANDLE_VALUE;

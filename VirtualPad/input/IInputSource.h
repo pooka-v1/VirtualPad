@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include "../GamepadState.h"
+#include "ControllerConfig.h"
 
 // Pure abstract interface that every input source must implement.
 //
@@ -26,4 +27,8 @@ public:
 
     // Human-readable name used for logging and diagnostics.
     virtual const char* getName() const = 0;
+
+    // Replaces the button/axis mapping config without reopening the device.
+    // Called when the user switches game profiles at runtime.
+    virtual void setConfig(const ControllerConfig& cfg) = 0;
 };

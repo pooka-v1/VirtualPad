@@ -112,6 +112,21 @@ GamepadState PadEngine::getLastState() const {
     return m_lastState;
 }
 
+void PadEngine::setProfilePath(const std::string& path) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_profilePath = path;
+}
+
+std::string PadEngine::getProfilePath() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_profilePath;
+}
+
+std::string PadEngine::getActiveProfileName() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_activeProfileName;
+}
+
 void PadEngine::setDevice(const std::string& s) {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_device = s;
@@ -261,16 +276,37 @@ void PadEngine::threadFunc() {
         spdlog::warn("Could not load macro library: {}", ex.what());
     }
 
-    const ControllerConfig* cfg = findConfig(configs, selected.vid, selected.pid);
-    if (!cfg) {
+    const ControllerConfig* cfgBase = findConfig(configs, selected.vid, selected.pid);
+    if (!cfgBase) {
         spdlog::error("No config found for VID={:04X} PID={:04X} ({}). Add an entry to data/controllers.json and restart.",
             selected.vid, selected.pid, selected.name);
         setStatus("No config for this device");
         m_running = false;
         return;
     }
-    spdlog::info("Config loaded: {}", cfg->source_name);
-    setDevice(cfg->source_name);
+    spdlog::info("Config loaded: {}", cfgBase->source_name);
+    setDevice(cfgBase->source_name);
+
+    // Apply game profile (if any) on top of the base config.
+    // Profile is applied here, before creating IInputSource, so button mappings are correct.
+    ControllerConfig effectiveCfg = *cfgBase;
+    {
+        std::string profilePath = getProfilePath();
+        if (!profilePath.empty()) {
+            try {
+                GameProfile profile = loadGameProfile(profilePath);
+                effectiveCfg = applyProfile(*cfgBase, profile);
+                { std::lock_guard<std::mutex> lock(m_mutex); m_activeProfileName = profile.profile_name; }
+                spdlog::info("Game profile '{}' applied.", profile.profile_name);
+            } catch (const std::exception& ex) {
+                spdlog::warn("Could not load game profile: {}", ex.what());
+            }
+        } else {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_activeProfileName.clear();
+        }
+    }
+    const ControllerConfig* cfg = &effectiveCfg;
 
     // --- Factory: pick the right IInputSource based on the config mode ---
     std::unique_ptr<IInputSource> input;
@@ -310,11 +346,12 @@ void PadEngine::threadFunc() {
         return;
     }
 
-    int lightningBotBit = findBotBit(*cfg, "LightningBot");
-    if (lightningBotBit > 0)
-        spdlog::info("LightningBot assigned to button {}.", lightningBotBit);
+    // Track which profile is currently applied so we can detect changes
+    std::string currentProfilePath = getProfilePath();
 
-    // --- Step 4: Parse macros ---
+    // --- Step 4: Parse macros (wrapped in lambda for hot-swap reuse) ---
+    int lightningBotBit = 0;
+
     std::unordered_map<int, Macro>       macros;
     std::unordered_map<int, bool>        macroPrevBtn;
     std::unordered_map<int, std::string> macroNames;
@@ -322,31 +359,45 @@ void PadEngine::threadFunc() {
     std::unordered_map<int, float>       macroLastRX;
     std::unordered_map<int, float>       macroLastRY;
 
-    for (const auto& [bit, action] : cfg->buttons) {
-        if (action.type != ButtonActionType::Macro) continue;
-        std::string execution = action.execution;
-        if (execution.empty()) {
-            auto it = macroLibrary.find(action.name);
-            if (it == macroLibrary.end()) {
-                spdlog::warn("Macro '{}' (button {}) not found in library — skipped.", action.name, bit);
-                continue;
+    auto initMacros = [&]() {
+        macros.clear();
+        macroPrevBtn.clear();
+        macroNames.clear();
+        macroRotCount.clear();
+        macroLastRX.clear();
+        macroLastRY.clear();
+
+        lightningBotBit = findBotBit(*cfg, "LightningBot");
+        if (lightningBotBit > 0)
+            spdlog::info("LightningBot assigned to button {}.", lightningBotBit);
+
+        for (const auto& [bit, action] : cfg->buttons) {
+            if (action.type != ButtonActionType::Macro) continue;
+            std::string execution = action.execution;
+            if (execution.empty()) {
+                auto it = macroLibrary.find(action.name);
+                if (it == macroLibrary.end()) {
+                    spdlog::warn("Macro '{}' (button {}) not found in library — skipped.", action.name, bit);
+                    continue;
+                }
+                execution = it->second;
             }
-            execution = it->second;
+            try {
+                Macro m;
+                MacroParser::parse(execution, m);
+                macros[bit]        = std::move(m);
+                macroPrevBtn[bit]  = false;
+                macroNames[bit]    = action.name;
+                macroRotCount[bit] = 0;
+                macroLastRX[bit]   = 0.0f;
+                macroLastRY[bit]   = 0.0f;
+                spdlog::info("Macro '{}' assigned to button {}.", action.name, bit);
+            } catch (const std::exception& ex) {
+                spdlog::error("Error parsing macro '{}': {}", action.name, ex.what());
+            }
         }
-        try {
-            Macro m;
-            MacroParser::parse(execution, m);
-            macros[bit]        = std::move(m);
-            macroPrevBtn[bit]  = false;
-            macroNames[bit]    = action.name;
-            macroRotCount[bit] = 0;
-            macroLastRX[bit]   = 0.0f;
-            macroLastRY[bit]   = 0.0f;
-            spdlog::info("Macro '{}' assigned to button {}.", action.name, bit);
-        } catch (const std::exception& ex) {
-            spdlog::error("Error parsing macro '{}': {}", action.name, ex.what());
-        }
-    }
+    };
+    initMacros();
 
     // --- Main loop ---
     setStatus("Running");
@@ -358,6 +409,31 @@ void PadEngine::threadFunc() {
     bool         btnAPrev   = false;
 
     while (m_running) {
+        // Profile hot-swap: detect change and re-apply without reopening the device
+        std::string newProfile = getProfilePath();
+        if (newProfile != currentProfilePath) {
+            currentProfilePath = newProfile;
+            effectiveCfg = *cfgBase;
+            if (!currentProfilePath.empty()) {
+                try {
+                    GameProfile profile = loadGameProfile(currentProfilePath);
+                    effectiveCfg = applyProfile(*cfgBase, profile);
+                    { std::lock_guard<std::mutex> lock(m_mutex); m_activeProfileName = profile.profile_name; }
+                    spdlog::info("Game profile '{}' applied (hot-swap).", profile.profile_name);
+                } catch (const std::exception& ex) {
+                    spdlog::warn("Could not apply game profile: {}", ex.what());
+                }
+            } else {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                m_activeProfileName.clear();
+            }
+            input->setConfig(*cfg);   // cfg == &effectiveCfg, now updated
+            if (bot.isActive()) bot.toggle();
+            botBtnPrev = false;
+            btnAPrev   = false;
+            initMacros();
+        }
+
         if (!input->isConnected()) {
             if (m_connected) {
                 spdlog::warn("[{}] disconnected. Waiting...", cfg->source_name);

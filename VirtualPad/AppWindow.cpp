@@ -60,6 +60,30 @@ int AppWindow::run() {
         m_controllerConfigs = loadControllerConfigs("data/controllers.json");
     } catch (...) {}   // optional — scanner falls back to WinMM names if missing
 
+    // Discover game profiles in data/ (any .json that has a profile_name field)
+    m_profilePaths.clear();
+    m_profileNames.clear();
+    {
+        WIN32_FIND_DATAA fd = {};
+        HANDLE h = FindFirstFileA("data\\*.json", &fd);
+        if (h != INVALID_HANDLE_VALUE) {
+            do {
+                std::string fname = fd.cFileName;
+                if (fname == "controllers.json" || fname == "macros.json" || fname == "virtualpad.json")
+                    continue;
+                std::string path = "data/" + fname;
+                try {
+                    GameProfile p = loadGameProfile(path);
+                    if (!p.profile_name.empty()) {
+                        m_profilePaths.push_back(path);
+                        m_profileNames.push_back(p.profile_name);
+                    }
+                } catch (...) {}
+            } while (FindNextFileA(h, &fd));
+            FindClose(h);
+        }
+    }
+
     m_engine.start();
 
     ShowWindow(m_hwnd, SW_SHOWDEFAULT);
@@ -178,6 +202,37 @@ void AppWindow::renderEngineTab() {
     ImGui::TextDisabled("Status:");
     ImGui::SameLine();
     ImGui::Text("%s", m_engine.getStatus().c_str());
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ── Game profile selector ─────────────────────────────────────────────
+    ImGui::Text("Game profile:");
+    ImGui::SameLine();
+
+    std::vector<const char*> profileItems;
+    profileItems.push_back("(none)");
+    for (const auto& n : m_profileNames)
+        profileItems.push_back(n.c_str());
+
+    ImGui::SetNextItemWidth(260.0f);
+    if (ImGui::Combo("##profile", &m_profileSelected, profileItems.data(), (int)profileItems.size())) {
+        if (m_profileSelected == 0)
+            m_engine.setProfilePath("");
+        else
+            m_engine.setProfilePath(m_profilePaths[m_profileSelected - 1]);
+    }
+
+    // Show active profile name if the engine is running with one
+    std::string activeName = m_engine.getActiveProfileName();
+    if (!activeName.empty()) {
+        ImGui::SameLine();
+        ImGui::TextColored({ 0.4f, 0.9f, 0.4f, 1.0f }, "(active: %s)", activeName.c_str());
+    } else if (connected && m_profileSelected != 0) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(reconnect to apply)");
+    }
 
     ImGui::Spacing();
     ImGui::Separator();

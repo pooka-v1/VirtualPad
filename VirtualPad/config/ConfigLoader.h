@@ -24,3 +24,25 @@ struct VirtualPadConfig {
 // Loads virtual pad identity config from a JSON file.
 // Returns defaults if the file does not exist.
 VirtualPadConfig loadVirtualPadConfig(const std::string& path);
+
+// ── Game profiles ──────────────────────────────────────────────────────────
+
+// A game profile declares button overrides for one or more controllers.
+// Axes and dpad are always inherited from controllers.json unchanged.
+struct GameProfile {
+    std::string profile_name;
+
+    struct Override {
+        uint16_t vid = 0, pid = 0;
+        std::unordered_map<int, ButtonAction> buttons;  // physical bit -> action
+    };
+    std::vector<Override> overrides;
+};
+
+// Loads a game profile JSON. Returns a profile with an empty name if the
+// file does not exist or has no profile_name field.
+GameProfile loadGameProfile(const std::string& path);
+
+// Returns a copy of base with the matching override's buttons applied on top.
+// Axes and dpad are unchanged. If no override matches vid/pid, returns base as-is.
+ControllerConfig applyProfile(const ControllerConfig& base, const GameProfile& profile);

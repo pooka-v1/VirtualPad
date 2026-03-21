@@ -15,6 +15,7 @@ public:
     bool        read(GamepadState& state) override;
     const char* getName()           const override { return m_config.source_name.c_str(); }
     DWORD       getLastButtonMask() const override { return m_lastButtonMask; }
+    void        setConfig(const ControllerConfig& cfg) override { m_config = cfg; }
 
 private:
     UINT             m_joyId;

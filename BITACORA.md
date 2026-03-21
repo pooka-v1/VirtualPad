@@ -5,48 +5,43 @@
 
 ---
 
-## V1–V9 (resumen)
+## V1–V11 (resumen)
 
 - **V1** — WinMM → ViGEm. Loop consola.
-- **V2** — Config JSON por VID/PID. nlohmann/json.
-- **V3** — LightningBot (FFX). tools/TriggerCount (calibración).
+- **V2** — Config JSON por VID/PID.
+- **V3** — LightningBot (FFX). tools/TriggerCount.
 - **V4** — DSL de macros. LuluMacro. tools/lulu_macro_tests.csv.
-- **V5** — Refactor modular (input/, output/, config/, bots/, macros/).
-- **V6** — Dear ImGui + PadEngine threaded. configs/ → data/.
-- **V7** — PadScanner visual (Tab Scanner).
-- **V8** — virtualpad.json. Prep dual-API.
-- **V9** — HIDInputSource + HIDScanner. ValCaps. hid_brake/hid_accel. DeviceCandidate.
+- **V5** — Refactor modular.
+- **V6** — Dear ImGui + PadEngine threaded. data/.
+- **V7** — PadScanner visual.
+- **V8** — virtualpad.json.
+- **V9** — HIDInputSource + HIDScanner. DeviceCandidate.
+- **V10** — spdlog + HidHide. Cadena completa verificada ✓.
+- **V11** — Fix normalizeHIDAxis (unsigned axes). Fix hat switch [1,8] vs [0,8].
 
 ---
 
-## V10 — ~2026/03/19 — spdlog + HidHide (Fase B)
+## Sesión 2026/03/20 (1) — V12: perfiles de juego + DS4 + F310 + botones extra
 
-- spdlog (header-only): consola + fichero rotativo. Nivel configurable en virtualpad.json.
-- HidHideClient: whitelist VirtualPad.exe, blacklist mando físico mientras está activo.
-- Cadena completa verificada: Pro 3 D-mode BT → VirtualPad → ViGEm → Steam ✓.
+### Sistema de perfiles de juego
+- Limpiado `controllers.json`: eliminados macros y bots. Config base pura.
+- Botones sin equivalente Xbox (Rp, Lp, L4, R4) documentados con claves `_` en buttons.
+- `data/FinalFantasyX.json`: overrides para Pro 3 y Pro 2 D-mode.
+- `ConfigLoader`: `GameProfile`, `loadGameProfile`, `applyProfile`. Claves `_` ignoradas en el parser.
+- Selector de perfil en tab Engine: descubre JSONs de perfiles en `data/` automáticamente.
+- Hot-swap en `PadEngine`: detección de cambio en el loop, `effectiveCfg` se recalcula, `input->setConfig()` actualiza IInputSource sin reabrir el device.
+- `setConfig()` añadido a `IInputSource` (virtual pura), implementado en `EightBitDoInputSource` y `HIDInputSource`.
 
----
+### A4.3 — Logitech F310 D-mode ✓
+- Gatillos **digitales** (botones 7/8). Ejes: dwXpos/dwYpos (left), dwZpos/dwRpos (right).
+- Mode `dinput` (WinMM). Descartado modo HID.
 
-## Sesión 2026/03/19 — V11: fixes HIDInputSource
+### A4.2 — Sony DualShock 4 v2 ✓ (USB + BT)
+- VID:054C PID:09CC. WinMM dinput. BT y USB comparten VID/PID → config única.
+- Gatillos analógicos en dwUpos (L2) y dwVpos (R2). 13 botones activos.
 
-### Decisiones de arquitectura
-- **WinMM queda como legacy** para D-mode (no se elimina).
-- **XInput descartado**: no aporta nada que HID no dé.
-- **X-mode vía HID = prototipo**: solo expone 10 botones estándar Xbox. Se mantiene WinMM para X-mode.
-- **D-mode** es el camino para botones extra (Home, L4, R4, Lp, Rp).
+### A4.4 — Botones extra Pro 3/Pro 2 D-mode ✓
+- Home mapeado. Lp/Rp/L4/R4 sin equivalente Xbox → solo macro/bot en perfiles.
 
-### Bug: `normalizeHIDAxis` — ejes unsigned `[0, -1]`
-- **Síntoma**: sticks y triggers devolvían 0.0f siempre en modo HID.
-- **Causa**: descriptor HID reporta `logMax = -1` (LONG) para ejes unsigned → `range = -1` → early return 0.
-- **Fix**: añadido `bitSize` a `ValueRange`. Si `logMax < logMin` (unsigned), usa `uMax = (1 << bitSize) - 1`.
-- **Afecta**: todos los mandos HID con descriptor unsigned (Pro 2 D-mode, F310).
-
-### Bug: Hat switch encoding `[1,8]` vs `[0,8]`
-- **Síntoma**: diagonal NW no funcionaba en Pro 3 X-mode.
-- **Causa**: Pro 3 X-mode usa hat `[1,8]` donde 8=NW y center=0 (fuera de rango).
-- **Fix**: detección por rango — si `hatValue < logMin || hatValue > logMax` → neutral.
-- **Backward compatible**: Pro 2 D-mode usa `[0,8]` — sigue funcionando.
-
-### Estado al cerrar
-- Pro 2 D-mode: HID con normalización de ejes correcta ✓
-- F310 D-mode: ídem ✓
+### Fix: traza periódica HIDInputSource
+- `m_readCount` ahora avanza también en el path de timeout (mandos que solo envían en cambio de estado).

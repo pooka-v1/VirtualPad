@@ -58,6 +58,11 @@ public:
     void        selectDevice(int index);   // call from UI during WaitingSelection
     GamepadState getLastState() const;
 
+    // Game profile — set from UI thread; applied at next Configuring phase
+    void        setProfilePath(const std::string& path);
+    std::string getProfilePath()       const;
+    std::string getActiveProfileName() const;
+
 private:
     void threadFunc();
 
@@ -74,8 +79,10 @@ private:
     std::atomic<int>         m_selectedIndex { -1 };      // index into m_candidates
     std::atomic<uint16_t>    m_virtualVid    { 0 };
     std::atomic<uint16_t>    m_virtualPid    { 0 };
-    std::vector<DeviceCandidate> m_candidates;   // protected by m_mutex
-    GamepadState                 m_lastState;    // protected by m_mutex
+    std::vector<DeviceCandidate> m_candidates;      // protected by m_mutex
+    GamepadState                 m_lastState;        // protected by m_mutex
+    std::string                  m_profilePath;      // protected by m_mutex
+    std::string                  m_activeProfileName; // protected by m_mutex
     HidHideClient                m_hidHide;
 
     void setDevice(const std::string& s);

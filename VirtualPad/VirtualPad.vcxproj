@@ -21,7 +21,7 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{3AA97DEB-4B7F-4590-B63B-1E55F8AC038E}</ProjectGuid>
+    <ProjectGuid>{1435C33B-0063-4B89-AAD5-4CCD601FA28F}</ProjectGuid>
     <RootNamespace>VirtualPad</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>

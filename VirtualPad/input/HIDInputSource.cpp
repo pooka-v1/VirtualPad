@@ -142,6 +142,12 @@ bool HIDInputSource::read(GamepadState& state) {
             // Timeout — no new data, keep last state
             CancelIo(m_device);
             WaitForSingleObject(m_event, INFINITE); // drain the cancelled I/O
+            if (++m_readCount % 240 == 0) {
+                spdlog::debug("[HID][{}] lx={:.2f} ly={:.2f} rx={:.2f} ry={:.2f} tL={:.2f} tR={:.2f} btns={:08X} (no report)",
+                       m_name,
+                       state.leftX, state.leftY, state.rightX, state.rightY,
+                       state.triggerL, state.triggerR, m_lastButtonMask);
+            }
             return true;
         }
         if (!GetOverlappedResult(m_device, &ov, &bytesRead, FALSE)) {

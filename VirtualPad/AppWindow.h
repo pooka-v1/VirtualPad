@@ -65,6 +65,11 @@ private:
     // --- Controller configs (for friendly name lookup in the scanner) ---
     std::vector<ControllerConfig> m_controllerConfigs;
 
+    // --- Game profiles ---
+    std::vector<std::string> m_profilePaths;   // full paths to discovered profile JSONs
+    std::vector<std::string> m_profileNames;   // profile_name from each JSON
+    int                      m_profileSelected = 0;  // 0 = none, 1+ = index into lists
+
     // --- HID live monitor (scanner right panel for HID devices) ---
     // Uses the engine's last read state — avoids competing with the engine on BT HID.
     GamepadState m_hidScanState = {};

@@ -1,6 +1,6 @@
 # VirtualPad
 
-Lee mandos físicos (WinMM, HID) y los reenvía como un mando Xbox 360 virtual via ViGEm.
+Lee mandos físicos (WinMM, HID, XInput) y los reenvía como un mando Xbox 360 virtual via ViGEm.
 Soporta macros, bots y configuración por JSON sin tocar el código.
 Interfaz gráfica con Dear ImGui (Win32 + DirectX 11).
 
@@ -29,22 +29,12 @@ Interfaz gráfica con Dear ImGui (Win32 + DirectX 11).
 
 | mode | API | Cuándo usarlo |
 |---|---|---|
-| `"dinput"` | WinMM | Aparece en Tab Scanner → WinMM |
+| `"dinput"` | WinMM | Tab Scanner → WinMM |
 | `"xinput"` | WinMM compat | Mando XInput en modo compatibilidad |
-| `"hid"` | HID raw | Aparece en Tab Scanner → HID-only |
+| `"hid"` | HID raw | Tab Scanner → HID-only |
 
-### Ejes WinMM (dinput/xinput)
-`"dwXpos"`, `"dwYpos"`, `"dwZpos"`, `"dwRpos"`, `"dwUpos"`, `"dwVpos"` → targets `left_x/y`, `right_x/y`, `trigger_l/r`, `trigger_combined`.
-
-### Ejes HID
-| Nombre | Usage | Uso típico |
-|---|---|---|
-| `"hid_x"` / `"hid_y"` | 0x30/0x31 | Stick izquierdo |
-| `"hid_z"` / `"hid_rz"` | 0x32/0x35 | Stick derecho |
-| `"hid_brake"` | 0xC4 | Gatillo L2 analógico |
-| `"hid_accel"` | 0xC5 | Gatillo R2 analógico |
-
-D-pad HID: `"dpad": "hid_hat"`
+### Ejes WinMM: `"dwXpos"`, `"dwYpos"`, `"dwZpos"`, `"dwRpos"`, `"dwUpos"`, `"dwVpos"`
+### Ejes HID: `"hid_x/y/z/rz"`, `"hid_brake"` (0xC4), `"hid_accel"` (0xC5)
 
 ---
 
@@ -61,10 +51,58 @@ Ver [MACROS.md](MACROS.md) para la sintaxis completa de macros.
 
 ---
 
+## Perfiles de juego
+
+`controllers.json` es la config base pura. Los macros, bots y asignaciones especiales van en un JSON separado por juego.
+
+```json
+{
+  "profile_name": "Final Fantasy X",
+  "overrides": [
+    {
+      "vid": "2DC8", "pid": "6009",
+      "buttons": {
+        "3":  { "type": "macro", "name": "BanishingBlade" },
+        "6":  { "type": "bot",   "name": "LightningBot" },
+        "15": { "type": "macro", "name": "LuluOverdrive" }
+      }
+    }
+  ]
+}
+```
+
+Solo se declaran los botones que cambian. El perfil se selecciona desde la UI o `virtualpad.json`. Hot-swap en tiempo real.
+
+---
+
+## Mando de botones — mandos soportados
+
+### 8BitDo Pro 3 — D-mode (VID:2DC8 PID:6009)
+
+| WinMM | Físico | Virtual |
+|---|---|---|
+| 1 | B | b | 2 | A | a | **3** | **Rp** | **—** | 4 | Y | y | 5 | X | x | **6** | **Lp** | **—** |
+| 7 | LB | l1 | 8 | RB | r1 | 9 | L2 | trigger l2 | 10 | R2 | trigger r2 |
+| 11 | Select | select | 12 | Start | start | 13 | Home | home | 14 | L3 | l3 | 15 | R3 | r3 |
+| **17** | **L4** | **—** | **18** | **R4** | **—** |
+
+### Logitech F310 — D-mode (VID:046D PID:C216)
+
+Gatillos digitales (botones 7/8). Sin Home ni botones extra.
+
+### Sony DualShock 4 v2 (VID:054C PID:09CC)
+
+L2/R2 analógicos (dwUpos/dwVpos). USB y BT comparten VID/PID.
+
+---
+
 ## Archivos de datos
 
 | Archivo | Descripción |
 |---|---|
 | `data/controllers.json` | Configuración base de mandos físicos |
+| `data/FinalFantasyX.json` | Perfil de juego para FFX |
 | `data/macros.json` | Biblioteca de macros reutilizables |
 | `data/virtualpad.json` | VID/PID del mando virtual + nivel de log |
+
+Ver [MACROS.md](MACROS.md) para la sintaxis completa de macros.
