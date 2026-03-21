@@ -65,6 +65,7 @@ Formato: `LAX`, `LAY`, `RAX`, `RAY` seguido de un valor float entre `-1.0` y `1.
 - Y: `-1.0` = tope abajo · `0` = centro · `+1.0` = tope arriba
 
 **Diagonales (círculo unidad):** usar `±0.71` (= cos/sin de 45°), no `±0.5`.
+`0.5+0.5` da el ángulo correcto pero el stick solo llega al 70% de recorrido.
 
 ---
 
@@ -96,6 +97,9 @@ Formato: `LAX`, `LAY`, `RAX`, `RAY` seguido de un valor float entre `-1.0` y `1.
 | `DEFAULT_STEP_MS`  | 200ms  | Slot de cada ítem en una secuencia (provisional) |
 | `DEFAULT_PRESS_MS` | 80ms   | Duración de pulsación dentro del slot            |
 
+> El valor de 200ms es provisional. Medir la pulsación media real del usuario
+> y ajustar `DEFAULT_STEP_MS` en `MacroParser.h`.
+
 Para usar una duración diferente a la por defecto: `A=150` (hold+slot = 150ms).
 
 ---
@@ -103,21 +107,31 @@ Para usar una duración diferente a la por defecto: `A=150` (hold+slot = 150ms).
 ## Ejemplos probados
 
 ### Límites de Auron (FFX)
+Secuencia de pulsaciones del límite. Ajustar botones y tiempos según la secuencia real del juego.
 ```json
-"name": "BanishingBlade",
-"execution": "CU, L1, CD, R1, CR, CL, Y"
+          "name": "BanishingBlade",
+          "execution": "CU, L1, CD, R1, CR, CL, Y"
 ```
 
 ### Lulu Overdrive (FFX)
 Gira el analógico derecho en 8 puntos del círculo unidad, ~4 rotaciones/segundo.
 Cada posición se mantiene 30ms. Dura 10 segundos y para automáticamente.
 ```json
-"name": "LuluOverdrive",
-"execution": "A, 1500,(RAX0+RAY1=17, RAX0.383+RAY0.924=17, RAX0.71+RAY0.71=17, RAX0.924+RAY0.383=17, RAX1+RAY0=17, RAX0.924+RAY-0.383=17, RAX0.71+RAY-0.71=17, RAX0.383+RAY-0.924=17, RAX0+RAY-1=17, RAX-0.383+RAY-0.924=17, RAX-0.71+RAY-0.71=17, RAX-0.924+RAY-0.383=17, RAX-1+RAY0=17, RAX-0.924+RAY0.383=17, RAX-0.71+RAY0.71=17, RAX-0.383+RAY0.924=17)*7000"
+		  "name": "LuluOverdrive",
+          "execution": "A, 1500,(RAX0+RAY1=17, RAX0.383+RAY0.924=17, RAX0.71+RAY0.71=17, RAX0.924+RAY0.383=17, RAX1+RAY0=17, RAX0.924+RAY-0.383=17, RAX0.71+RAY-0.71=17, RAX0.383+RAY-0.924=17, RAX0+RAY-1=17, RAX-0.383+RAY-0.924=17, RAX-0.71+RAY-0.71=17, RAX-0.924+RAY-0.383=17, RAX-1+RAY0=17, RAX-0.924+RAY0.383=17, RAX-0.71+RAY0.71=17, RAX-0.383+RAY0.924=17)*7000",
 ```
+
 > Resultado: 7 vueltas conseguidas (máximo manual ~6). ✓
 
-### Hadouken (Street Fighter)
+### Presa Soul Calibur
+Dos botones simultáneos difíciles de pulsar a la vez en mando de PlayStation.
+```json
+"execution": "A + Y"
+```
+
+### Hadouken (Street Fighter / juegos de lucha)
+Mirando a la derecha.
+Quarter circle forward + puñetazo. Cruceta: abajo → abajo-derecha → derecha + botón.
 ```json
 "execution": "CU, CDR, CR + X"
 ```
@@ -126,13 +140,17 @@ Cada posición se mantiene 30ms. Dura 10 segundos y para automáticamente.
 ```json
 "execution": "(CU, CU, CD, CD, CL, CR, CL, CR, B, A, ST)*1"
 ```
+> Con `*1` se ejecuta una vez (1ms de tiempo total, la secuencia se completa entera).
+> Alternativa sin repeat: `"CU, CU, CD, CD, CL, CR, CL, CR, B, A, ST"`
 
-### Ráfaga mientras pulsas (estilo Chun-Li)
+### Ráfaga de botón (estilo Chun-Li)
+Pulsa A repetidamente mientras mantengas el botón físico pulsado.
 ```json
 "execution": "A*UP"
 ```
 
 ### Ráfaga con velocidad exacta
+10 pulsaciones de A en 1 segundo.
 ```json
 "execution": "A*1000/10"
 ```
