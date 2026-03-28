@@ -33,4 +33,5 @@ struct ControllerConfig {
     std::unordered_map<int, ButtonAction>        buttons;  // physical bit (1-indexed) -> action
     std::unordered_map<std::string, AxisMapping> axes;     // WinMM source name -> mapping
     std::string dpad;
+    std::string layout_id;  // references an entry in data/pad_layouts.json; empty = use defaults
 };

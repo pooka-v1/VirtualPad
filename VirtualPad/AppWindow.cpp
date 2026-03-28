@@ -60,6 +60,10 @@ int AppWindow::run() {
         m_controllerConfigs = loadControllerConfigs("data/controllers.json");
     } catch (...) {}   // optional — scanner falls back to WinMM names if missing
 
+    try {
+        m_padLayouts = loadPadLayouts("data/pad_layouts.json");
+    } catch (...) {}   // optional — PadView uses default layout if missing
+
     // Discover game profiles in data/ (any .json that has a profile_name field)
     m_profilePaths.clear();
     m_profileNames.clear();
@@ -149,7 +153,7 @@ void AppWindow::renderFrame() {
     if (ImGui::BeginTabBar("MainTabs")) {
         if (ImGui::BeginTabItem("Engine"))  { renderEngineTab();  ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem("Scanner")) { renderScannerTab(); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("Pad"))     { renderPadTab();     ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("Pads"))    { renderPadsTab();    ImGui::EndTabItem(); }
         ImGui::EndTabBar();
     }
 
@@ -167,30 +171,15 @@ void AppWindow::renderEngineTab() {
     bool        connected = m_engine.isConnected();
     bool        running   = m_engine.isRunning();
 
-    if (phase == EnginePhase::WaitingSelection) {
-        ImGui::TextColored({ 1.0f, 0.8f, 0.0f, 1.0f }, "●");
-        ImGui::SameLine();
-        ImGui::Text("Multiple controllers detected — select one:");
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
-
-        auto candidates = m_engine.getCandidates();
-        for (int i = 0; i < (int)candidates.size(); ++i) {
-            const auto& dev = candidates[i];
-            const ControllerConfig* cfg = findConfig(m_controllerConfigs, dev.vid, dev.pid);
-            const char* displayName = cfg ? cfg->source_name.c_str() : dev.name.c_str();
-            const char* src = (dev.source == DeviceCandidate::Source::HID) ? "HID" : "WinMM";
-            char label[256];
-            snprintf(label, sizeof(label), "[%s]  %s    VID:%04X  PID:%04X",
-                src, displayName, dev.vid, dev.pid);
-            if (ImGui::Button(label))
-                m_engine.selectDevice(i);
-        }
-    } else if (connected) {
+    // ── Status indicator ──────────────────────────────────────────────────
+    if (connected) {
         ImGui::TextColored({ 0.3f, 1.0f, 0.3f, 1.0f }, "●");
         ImGui::SameLine();
         ImGui::Text("Connected — %s", m_engine.getDevice().c_str());
+    } else if (phase == EnginePhase::WaitingSelection) {
+        ImGui::TextColored({ 1.0f, 0.8f, 0.0f, 1.0f }, "●");
+        ImGui::SameLine();
+        ImGui::Text("Select a controller:");
     } else if (running) {
         ImGui::TextColored({ 1.0f, 0.8f, 0.0f, 1.0f }, "●");
         ImGui::SameLine();
@@ -202,9 +191,66 @@ void AppWindow::renderEngineTab() {
     }
 
     ImGui::Spacing();
-    ImGui::TextDisabled("Status:");
-    ImGui::SameLine();
-    ImGui::Text("%s", m_engine.getStatus().c_str());
+    ImGui::TextDisabled("Status: %s", m_engine.getStatus().c_str());
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ── Device list ───────────────────────────────────────────────────────
+    // WaitingSelection uses the candidates snapshot; all other states use the
+    // live monitor list so newly connected devices appear without a restart.
+    auto availableDevices = m_engine.getAvailableDevices();
+    auto candidates       = m_engine.getCandidates();
+    DeviceCandidate activeDevice = m_engine.getActiveDevice();
+
+    const std::vector<DeviceCandidate>& displayList =
+        (phase == EnginePhase::WaitingSelection && !candidates.empty())
+        ? candidates : availableDevices;
+
+    if (displayList.empty()) {
+        ImGui::TextDisabled("  No controllers detected");
+    } else {
+        for (int i = 0; i < (int)displayList.size(); ++i) {
+            const auto& dev = displayList[i];
+            const ControllerConfig* cfg = findConfig(m_controllerConfigs, dev.vid, dev.pid);
+            const char* displayName = cfg ? cfg->source_name.c_str() : dev.name.c_str();
+            const char* src = (dev.source == DeviceCandidate::Source::HID) ? "HID" : "WinMM";
+
+            // Determine if this entry is the currently active device
+            bool isActive = (dev.vid == activeDevice.vid && dev.pid == activeDevice.pid
+                          && dev.source == activeDevice.source);
+            if (isActive && dev.source == DeviceCandidate::Source::HID)
+                isActive = (dev.hidPath == activeDevice.hidPath);
+            if (isActive && dev.source == DeviceCandidate::Source::WinMM)
+                isActive = (dev.port == activeDevice.port);
+
+            if (isActive) {
+                ImGui::TextColored({ 0.3f, 1.0f, 0.3f, 1.0f }, "  >");
+                ImGui::SameLine();
+                ImGui::Text("[%s]  %s    VID:%04X  PID:%04X", src, displayName, dev.vid, dev.pid);
+            } else {
+                ImGui::Text("   ");
+                ImGui::SameLine();
+                ImGui::Text("[%s]  %s    VID:%04X  PID:%04X", src, displayName, dev.vid, dev.pid);
+                ImGui::SameLine();
+
+                char btnLabel[64];
+                snprintf(btnLabel, sizeof(btnLabel), "Activar##dev%d", i);
+
+                if (phase == EnginePhase::WaitingSelection) {
+                    if (ImGui::SmallButton(btnLabel))
+                        m_engine.selectDevice(i);
+                } else if (connected) {
+                    if (ImGui::SmallButton(btnLabel))
+                        m_engine.requestSwitch(i);
+                } else {
+                    ImGui::BeginDisabled();
+                    ImGui::SmallButton(btnLabel);
+                    ImGui::EndDisabled();
+                }
+            }
+        }
+    }
 
     ImGui::Spacing();
     ImGui::Separator();
@@ -227,7 +273,6 @@ void AppWindow::renderEngineTab() {
             m_engine.setProfilePath(m_profilePaths[m_profileSelected - 1]);
     }
 
-    // Show active profile name if the engine is running with one
     std::string activeName = m_engine.getActiveProfileName();
     if (!activeName.empty()) {
         ImGui::SameLine();
@@ -780,7 +825,16 @@ void AppWindow::cleanupRenderTarget() {
     if (m_renderTarget) { m_renderTarget->Release(); m_renderTarget = nullptr; }
 }
 
-void AppWindow::renderPadTab() {
+void AppWindow::renderPadsTab() {
+    // Apply layout when the active controller changes
+    std::string layoutId = m_engine.getActiveLayoutId();
+    if (layoutId != m_currentLayoutId) {
+        m_currentLayoutId = layoutId;
+        const PadLayout* layout = findLayout(m_padLayouts, layoutId);
+        if (layout)
+            m_padView.setLayout(*layout);
+    }
+
     ImGui::Spacing();
     m_padView.render(m_engine.getLastState());
 }

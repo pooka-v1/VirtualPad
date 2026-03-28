@@ -1,5 +1,6 @@
 #pragma once
 #include "../input/ControllerConfig.h"
+#include "../ui/PadLayout.h"
 #include <vector>
 #include <string>
 #include <unordered_map>
@@ -46,3 +47,12 @@ GameProfile loadGameProfile(const std::string& path);
 // Returns a copy of base with the matching override's buttons applied on top.
 // Axes and dpad are unchanged. If no override matches vid/pid, returns base as-is.
 ControllerConfig applyProfile(const ControllerConfig& base, const GameProfile& profile);
+
+// ── Pad layouts ─────────────────────────────────────────────────────────────
+
+// Loads all pad layouts from a JSON file.
+// Returns an empty vector if the file does not exist.
+std::vector<PadLayout> loadPadLayouts(const std::string& path);
+
+// Returns a pointer to the layout with the given id, or nullptr if not found.
+const PadLayout* findLayout(const std::vector<PadLayout>& layouts, const std::string& id);

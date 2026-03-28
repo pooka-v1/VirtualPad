@@ -7,6 +7,7 @@
 #include <windows.h>
 #include "PadScanner.h"
 #include "GamepadState.h"
+#include "input/ControllerConfig.h"
 #include "output/HidHideClient.h"
 
 // Unified description of a physical input device, regardless of API.
@@ -50,18 +51,22 @@ public:
     std::string getDevice()   const;
     std::string getStatus()   const;
 
-    // Phase / device selection (A3)
+    // Phase / device selection
     EnginePhase getPhase()       const { return m_phase.load(); }
     uint16_t    getVirtualVid()  const { return m_virtualVid.load(); }
     uint16_t    getVirtualPid()  const { return m_virtualPid.load(); }
-    std::vector<DeviceCandidate> getCandidates() const;
-    void        selectDevice(int index);   // call from UI during WaitingSelection
+    std::vector<DeviceCandidate> getCandidates()       const;  // for WaitingSelection (startup)
+    std::vector<DeviceCandidate> getAvailableDevices() const;  // live list from monitor thread
+    void        selectDevice(int index);    // call from UI during WaitingSelection
+    void        requestSwitch(int index);   // switch to available device[index] while Running
+    DeviceCandidate getActiveDevice() const;
     GamepadState getLastState() const;
 
     // Game profile — set from UI thread; applied at next Configuring phase
     void        setProfilePath(const std::string& path);
     std::string getProfilePath()       const;
     std::string getActiveProfileName() const;
+    std::string getActiveLayoutId()    const;
 
     // Mouse speed (pixels/tick at full stick deflection) — set from UI slider
     void  setMouseSpeed(float s);
@@ -69,8 +74,10 @@ public:
 
 private:
     void threadFunc();
+    void monitorFunc();  // background thread: keeps m_availableDevices updated
 
     std::thread        m_thread;
+    std::thread        m_monitorThread;
     std::atomic<bool>  m_running   { false };
     std::atomic<bool>  m_connected { false };
 
@@ -78,17 +85,24 @@ private:
     std::string        m_device;   // name of the active input device
     std::string        m_status;   // one-line human-readable status
 
-    // A3/A4 additions
     std::atomic<EnginePhase> m_phase         { EnginePhase::Idle };
-    std::atomic<int>         m_selectedIndex { -1 };      // index into m_candidates
+    std::atomic<int>         m_selectedIndex { -1 };      // index into m_candidates (WaitingSelection)
     std::atomic<uint16_t>    m_virtualVid    { 0 };
     std::atomic<uint16_t>    m_virtualPid    { 0 };
-    std::vector<DeviceCandidate> m_candidates;      // protected by m_mutex
-    GamepadState                 m_lastState;        // protected by m_mutex
-    std::string                  m_profilePath;      // protected by m_mutex
-    std::string                  m_activeProfileName; // protected by m_mutex
-    float                        m_mouseSpeed = 15.0f; // protected by m_mutex
-    HidHideClient                m_hidHide;
+    std::vector<DeviceCandidate>  m_candidates;       // startup multi-device selection; protected by m_mutex
+    std::vector<DeviceCandidate>  m_availableDevices; // live list from monitor; protected by m_mutex
+    std::vector<ControllerConfig> m_configs;          // shared with monitor thread; protected by m_mutex
+    DeviceCandidate               m_activeDevice;     // currently active physical device; protected by m_mutex
+    GamepadState                  m_lastState;        // protected by m_mutex
+    std::string                   m_profilePath;      // protected by m_mutex
+    std::string                   m_activeProfileName; // protected by m_mutex
+    std::string                   m_activeLayoutId;    // protected by m_mutex
+    float                         m_mouseSpeed = 15.0f; // protected by m_mutex
+    HidHideClient                 m_hidHide;
+
+    // Switch-in-hot: set by requestSwitch(), consumed by threadFunc()
+    std::atomic<bool>  m_switchPending  { false };
+    DeviceCandidate    m_switchTarget;  // protected by m_mutex
 
     void setDevice(const std::string& s);
     void setStatus(const std::string& s);

@@ -85,6 +85,7 @@ std::vector<ControllerConfig> loadControllerConfigs(const std::string& path) {
         cfg.source_name = c.at("source_name").get<std::string>();
         cfg.mode        = c.at("mode").get<std::string>();
         cfg.dpad        = c.value("dpad", "");
+        cfg.layout_id   = c.value("layout_id", "");
         cfg.buttons     = parseButtonsJson(c.at("buttons"));
 
         for (const auto& [source, axisJson] : c.at("axes").items()) {
@@ -170,4 +171,96 @@ ControllerConfig applyProfile(const ControllerConfig& base, const GameProfile& p
         }
     }
     return result;
+}
+
+// ---------------------------------------------------------------------------
+// Pad layouts
+// ---------------------------------------------------------------------------
+
+static float jf(const json& obj, const char* key, float def) {
+    return obj.contains(key) ? obj[key].get<float>() : def;
+}
+
+std::vector<PadLayout> loadPadLayouts(const std::string& path) {
+    std::vector<PadLayout> result;
+    std::ifstream f(path);
+    if (!f.is_open()) return result;
+
+    json root = json::parse(f);
+
+    auto parseColor4 = [](const json& obj, const char* key,
+                          float& r, float& g, float& b, float& a) {
+        if (!obj.contains(key) || !obj[key].is_array() || obj[key].size() < 3) return;
+        const auto& arr = obj[key];
+        r = arr[0].get<float>();
+        g = arr[1].get<float>();
+        b = arr[2].get<float>();
+        a = arr.size() >= 4 ? arr[3].get<float>() : 1.0f;
+    };
+
+    for (const auto& j : root.value("layouts", json::array())) {
+        PadLayout L;
+        L.id = j.value("id", "");
+        if (j.contains("canvas")) {
+            L.W      = jf(j["canvas"], "W",      L.W);
+            L.FrontH = jf(j["canvas"], "FrontH", L.FrontH);
+            L.TopH   = jf(j["canvas"], "TopH",   L.TopH);
+        }
+
+        for (const auto& cj : j.value("components", json::array())) {
+            if (!cj.contains("type")) continue;  // skip comment-only entries
+
+            PadComponent c;
+            c.id      = cj.value("id",      "");
+            c.view    = cj.value("view",    "top");
+            c.type    = cj.value("type",    "");
+            c.image   = cj.value("image",   "");
+            c.overlay = cj.value("overlay", "");
+            c.cx      = jf(cj, "cx", 0.0f);
+            c.cy      = jf(cj, "cy", 0.0f);
+            c.w       = jf(cj, "w",  0.0f);
+            c.h       = jf(cj, "h",  0.0f);
+            c.size      = jf(cj, "size",       0.0f);
+            c.maxOffset = jf(cj, "max_offset", 0.0f);
+            c.threshold = jf(cj, "threshold",  0.05f);
+
+            if (cj.contains("overlay_scale")) {
+                const auto& os = cj["overlay_scale"];
+                if (os.is_array() && os.size() >= 2) {
+                    c.overlayScaleX = os[0].get<float>();
+                    c.overlayScaleY = os[1].get<float>();
+                } else if (os.is_number()) {
+                    c.overlayScaleX = c.overlayScaleY = os.get<float>();
+                }
+            }
+
+            c.state      = cj.value("state",        "");
+            c.stateX     = cj.value("state_x",      "");
+            c.stateY     = cj.value("state_y",      "");
+            c.stateClick = cj.value("state_click",  "");
+            c.stateUp    = cj.value("state_up",     "");
+            c.stateDown  = cj.value("state_down",   "");
+            c.stateLeft  = cj.value("state_left",   "");
+            c.stateRight = cj.value("state_right",  "");
+            c.imageUp    = cj.value("image_up",     "");
+            c.imageDown  = cj.value("image_down",   "");
+            c.imageLeft  = cj.value("image_left",   "");
+            c.imageRight = cj.value("image_right",  "");
+
+            parseColor4(cj, "color",                c.colorR,         c.colorG,         c.colorB,         c.colorA);
+            parseColor4(cj, "active_color",         c.activeColorR,   c.activeColorG,   c.activeColorB,   c.activeColorA);
+            parseColor4(cj, "overlay_color",        c.ovColorR,       c.ovColorG,       c.ovColorB,       c.ovColorA);
+            parseColor4(cj, "active_overlay_color", c.activeOvColorR, c.activeOvColorG, c.activeOvColorB, c.activeOvColorA);
+
+            L.components.push_back(std::move(c));
+        }
+        result.push_back(std::move(L));
+    }
+    return result;
+}
+
+const PadLayout* findLayout(const std::vector<PadLayout>& layouts, const std::string& id) {
+    for (const auto& L : layouts)
+        if (L.id == id) return &L;
+    return nullptr;
 }

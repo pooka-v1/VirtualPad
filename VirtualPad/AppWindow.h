@@ -35,7 +35,7 @@ private:
     void renderFrame();
     void renderEngineTab();
     void renderScannerTab();
-    void renderPadTab();
+    void renderPadsTab();
 
     // --- Win32 window procedure ---
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -75,6 +75,10 @@ private:
     // --- HID live monitor (scanner right panel for HID devices) ---
     // Uses the engine's last read state — avoids competing with the engine on BT HID.
     GamepadState m_hidScanState = {};
+
+    // --- Pad layouts ---
+    std::vector<PadLayout> m_padLayouts;
+    std::string            m_currentLayoutId;   // last layout applied to m_padView
 
     // --- Pad view (D1) ---
     PadView m_padView;
