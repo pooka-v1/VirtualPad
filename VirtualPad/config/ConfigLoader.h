@@ -8,9 +8,14 @@
 // Loads all controller configs from a JSON file.
 std::vector<ControllerConfig> loadControllerConfigs(const std::string& path);
 
-// Returns a pointer to the matching config, or nullptr if not found.
+// Returns a pointer to the best-matching config, or nullptr if not found.
+// Matches on VID+PID (required). connection (+2) and sourceName (+1) are optional
+// secondary discriminators. Entries that declare these fields are skipped when the
+// incoming value doesn't match; entries without them act as generic fallbacks.
 const ControllerConfig* findConfig(const std::vector<ControllerConfig>& configs,
-                                   uint16_t vid, uint16_t pid);
+                                   uint16_t vid, uint16_t pid,
+                                   const std::string& connection  = "",
+                                   const std::string& sourceName  = "");
 
 // Loads macro library from a JSON file (name -> execution string).
 // Returns an empty map if the file does not exist.
@@ -56,3 +61,7 @@ std::vector<PadLayout> loadPadLayouts(const std::string& path);
 
 // Returns a pointer to the layout with the given id, or nullptr if not found.
 const PadLayout* findLayout(const std::vector<PadLayout>& layouts, const std::string& id);
+
+// Serialises all pad layouts back to a JSON file.
+// Throws std::runtime_error if the file cannot be written.
+void savePadLayouts(const std::string& path, const std::vector<PadLayout>& layouts);

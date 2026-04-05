@@ -80,12 +80,13 @@ std::vector<ControllerConfig> loadControllerConfigs(const std::string& path) {
 
     for (const auto& c : root.at("controllers")) {
         ControllerConfig cfg;
-        cfg.vid         = static_cast<uint16_t>(std::stoul(c.at("vid").get<std::string>(), nullptr, 16));
-        cfg.pid         = static_cast<uint16_t>(std::stoul(c.at("pid").get<std::string>(), nullptr, 16));
-        cfg.source_name = c.at("source_name").get<std::string>();
-        cfg.mode        = c.at("mode").get<std::string>();
-        cfg.dpad        = c.value("dpad", "");
-        cfg.layout_id   = c.value("layout_id", "");
+        cfg.vid          = static_cast<uint16_t>(std::stoul(c.at("vid").get<std::string>(), nullptr, 16));
+        cfg.pid          = static_cast<uint16_t>(std::stoul(c.at("pid").get<std::string>(), nullptr, 16));
+        cfg.source_name  = c.at("source_name").get<std::string>();
+        cfg.mode         = c.at("mode").get<std::string>();
+        cfg.dpad         = c.value("dpad", "");
+        cfg.layout_id    = c.value("layout_id", "");
+        cfg.connection   = c.value("connection", "");
         cfg.buttons     = parseButtonsJson(c.at("buttons"));
 
         for (const auto& [source, axisJson] : c.at("axes").items()) {
@@ -96,6 +97,15 @@ std::vector<ControllerConfig> loadControllerConfigs(const std::string& path) {
             cfg.axes[source] = m;
         }
 
+        if (c.contains("touchpad")) {
+            const auto& tp        = c["touchpad"];
+            cfg.touchpad.enabled      = tp.value("enabled",       false);
+            cfg.touchpad.dataOffset   = tp.value("data_offset",   34);
+            cfg.touchpad.maxX         = tp.value("max_x",         1919);
+            cfg.touchpad.maxY         = tp.value("max_y",         942);
+            cfg.touchpad.mouseEnabled = tp.value("mouse_enabled", false);
+        }
+
         result.push_back(std::move(cfg));
     }
 
@@ -103,11 +113,37 @@ std::vector<ControllerConfig> loadControllerConfigs(const std::string& path) {
 }
 
 const ControllerConfig* findConfig(const std::vector<ControllerConfig>& configs,
-                                   uint16_t vid, uint16_t pid) {
-    for (const auto& c : configs)
-        if (c.vid == vid && c.pid == pid)
-            return &c;
-    return nullptr;
+                                   uint16_t vid, uint16_t pid,
+                                   const std::string& connection,
+                                   const std::string& sourceName) {
+    const ControllerConfig* best      = nullptr;
+    int                     bestScore = -1;
+
+    for (const auto& c : configs) {
+        if (c.vid != vid || c.pid != pid) continue;
+
+        int score = 0;
+
+        // connection: if entry declares it, incoming must match or we skip
+        if (!c.connection.empty()) {
+            if (connection.empty()) continue;
+            if (c.connection != connection) continue;
+            score += 2;
+        }
+
+        // source_name: only used when caller provides it (e.g. wizard re-pair)
+        // Runtime engine always passes "" → source_name is ignored, entry stays eligible
+        if (!sourceName.empty() && !c.source_name.empty()) {
+            if (c.source_name != sourceName) continue; // explicit mismatch → skip
+            score += 1;
+        }
+
+        if (score > bestScore) {
+            bestScore = score;
+            best      = &c;
+        }
+    }
+    return best;
 }
 
 std::unordered_map<std::string, std::string> loadMacroLibrary(const std::string& path) {
@@ -274,4 +310,83 @@ const PadLayout* findLayout(const std::vector<PadLayout>& layouts, const std::st
     for (const auto& L : layouts)
         if (L.id == id) return &L;
     return nullptr;
+}
+
+void savePadLayouts(const std::string& path, const std::vector<PadLayout>& layouts) {
+    auto writeColor4 = [](json& obj, const char* key, float r, float g, float b, float a) {
+        obj[key] = json::array({ r, g, b, a });
+    };
+
+    json root;
+    json jarr = json::array();
+
+    for (const auto& L : layouts) {
+        json jl;
+        jl["id"]     = L.id;
+        jl["canvas"] = json{ {"W", L.W}, {"FrontH", L.FrontH}, {"TopH", L.TopH} };
+
+        json jcomps = json::array();
+        for (const auto& c : L.components) {
+            json jc;
+            if (!c.id.empty())  jc["id"]   = c.id;
+            jc["view"]  = c.view;
+            jc["type"]  = c.type;
+
+            if (!c.image.empty())    jc["image"]   = c.image;
+            if (!c.overlay.empty())  jc["overlay"]  = c.overlay;
+
+            jc["cx"] = c.cx;
+            jc["cy"] = c.cy;
+
+            if (c.w         != 0.0f)  jc["w"]          = c.w;
+            if (c.h         != 0.0f)  jc["h"]          = c.h;
+            if (c.size      != 0.0f)  jc["size"]        = c.size;
+            if (c.maxOffset != 0.0f)  jc["max_offset"]  = c.maxOffset;
+            if (c.threshold != 0.05f) jc["threshold"]   = c.threshold;
+
+            if (c.overlayScaleX != 1.0f || c.overlayScaleY != 1.0f) {
+                if (c.overlayScaleX == c.overlayScaleY)
+                    jc["overlay_scale"] = c.overlayScaleX;
+                else
+                    jc["overlay_scale"] = json::array({ c.overlayScaleX, c.overlayScaleY });
+            }
+
+            if (!c.state.empty())      jc["state"]       = c.state;
+            if (!c.stateX.empty())     jc["state_x"]     = c.stateX;
+            if (!c.stateY.empty())     jc["state_y"]     = c.stateY;
+            if (!c.stateClick.empty()) jc["state_click"]  = c.stateClick;
+            if (!c.stateUp.empty())    jc["state_up"]    = c.stateUp;
+            if (!c.stateDown.empty())  jc["state_down"]  = c.stateDown;
+            if (!c.stateLeft.empty())  jc["state_left"]  = c.stateLeft;
+            if (!c.stateRight.empty()) jc["state_right"] = c.stateRight;
+
+            if (!c.imageUp.empty())    jc["image_up"]    = c.imageUp;
+            if (!c.imageDown.empty())  jc["image_down"]  = c.imageDown;
+            if (!c.imageLeft.empty())  jc["image_left"]  = c.imageLeft;
+            if (!c.imageRight.empty()) jc["image_right"] = c.imageRight;
+
+            writeColor4(jc, "color", c.colorR, c.colorG, c.colorB, c.colorA);
+            if (c.type == "button" || c.type == "stick" || c.type == "dpad") {
+                writeColor4(jc, "active_color",
+                            c.activeColorR, c.activeColorG, c.activeColorB, c.activeColorA);
+                if (c.type == "button") {
+                    writeColor4(jc, "overlay_color",
+                                c.ovColorR, c.ovColorG, c.ovColorB, c.ovColorA);
+                    writeColor4(jc, "active_overlay_color",
+                                c.activeOvColorR, c.activeOvColorG, c.activeOvColorB, c.activeOvColorA);
+                }
+            }
+
+            jcomps.push_back(std::move(jc));
+        }
+        jl["components"] = std::move(jcomps);
+        jarr.push_back(std::move(jl));
+    }
+
+    root["layouts"] = std::move(jarr);
+
+    std::ofstream f(path);
+    if (!f.is_open())
+        throw std::runtime_error("Cannot write pad_layouts: " + path);
+    f << root.dump(4) << '\n';
 }

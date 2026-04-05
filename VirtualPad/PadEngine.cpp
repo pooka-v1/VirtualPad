@@ -255,6 +255,16 @@ float PadEngine::getMouseSpeed() const {
     return m_mouseSpeed;
 }
 
+void PadEngine::reloadConfigs() {
+    try {
+        auto configs = loadControllerConfigs("data/controllers.json");
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_configs = std::move(configs);
+    } catch (const std::exception& ex) {
+        spdlog::warn("reloadConfigs failed: {}", ex.what());
+    }
+}
+
 void PadEngine::setDevice(const std::string& s) {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_device = s;
@@ -306,7 +316,7 @@ void PadEngine::monitorFunc() {
 
         for (auto& h : hidEntries) {
             if (vVid && h.vid == vVid && h.pid == vPid) continue;  // skip virtual pad
-            const ControllerConfig* cfg = findConfig(configs, h.vid, h.pid);
+            const ControllerConfig* cfg = findConfig(configs, h.vid, h.pid, h.connectionType);
             bool inWinMM = false;
             for (auto& e : winmmEntries)
                 if (e.wMid == h.vid && e.wPid == h.pid) { inWinMM = true; break; }
@@ -314,11 +324,12 @@ void PadEngine::monitorFunc() {
             if (cfg && cfg->mode != "hid" && inWinMM) continue;
 
             DeviceCandidate c;
-            c.source  = DeviceCandidate::Source::HID;
-            c.hidPath = h.path;
-            c.vid     = h.vid;
-            c.pid     = h.pid;
-            c.name    = h.productName.empty()
+            c.source         = DeviceCandidate::Source::HID;
+            c.hidPath        = h.path;
+            c.vid            = h.vid;
+            c.pid            = h.pid;
+            c.connectionType = h.connectionType;
+            c.name           = h.productName.empty()
                 ? ("HID " + std::to_string(h.vid) + ":" + std::to_string(h.pid))
                 : h.productName;
             candidates.push_back(c);
@@ -410,6 +421,8 @@ void PadEngine::threadFunc() {
             // Normal startup scan loop
             m_phase.store(EnginePhase::Scanning);
             while (m_running && selected.vid == 0) {
+                // Pick up any config updates written by the BindingWizard
+                { std::lock_guard<std::mutex> lock(m_mutex); configs = m_configs; }
                 auto winmmEntries = scanPorts();
                 auto hidEntries   = HIDScanner::scan();
 
@@ -434,18 +447,19 @@ void PadEngine::threadFunc() {
 
                 for (auto& h : hidEntries) {
                     if (vpCfg.vid && h.vid == vpCfg.vid && h.pid == vpCfg.pid) continue;
-                    const ControllerConfig* c = findConfig(configs, h.vid, h.pid);
+                    const ControllerConfig* c = findConfig(configs, h.vid, h.pid, h.connectionType);
                     bool inWinMM = false;
                     for (auto& e : winmmEntries)
                         if (e.wMid == h.vid && e.wPid == h.pid) { inWinMM = true; break; }
                     if (!c && inWinMM) continue;
                     if (c && c->mode != "hid" && inWinMM) continue;
                     DeviceCandidate dc;
-                    dc.source  = DeviceCandidate::Source::HID;
-                    dc.hidPath = h.path;
-                    dc.vid     = h.vid;
-                    dc.pid     = h.pid;
-                    dc.name    = h.productName.empty()
+                    dc.source         = DeviceCandidate::Source::HID;
+                    dc.hidPath        = h.path;
+                    dc.vid            = h.vid;
+                    dc.pid            = h.pid;
+                    dc.connectionType = h.connectionType;
+                    dc.name           = h.productName.empty()
                         ? ("HID " + std::to_string(h.vid) + ":" + std::to_string(h.pid))
                         : h.productName;
                     allCandidates.push_back(dc);
@@ -504,7 +518,8 @@ void PadEngine::threadFunc() {
         // ── Configure ────────────────────────────────────────────────────────
         { std::lock_guard<std::mutex> lock(m_mutex); m_activeDevice = selected; }
 
-        const ControllerConfig* cfgBase = findConfig(configs, selected.vid, selected.pid);
+        const ControllerConfig* cfgBase = findConfig(configs, selected.vid, selected.pid,
+                                                     selected.connectionType);
         if (!cfgBase) {
             spdlog::error("No config for VID={:04X} PID={:04X} ({}) — add to controllers.json.",
                 selected.vid, selected.pid, selected.name);
@@ -773,6 +788,26 @@ void PadEngine::threadFunc() {
                 float speed = getMouseSpeed();
                 mouseAccumX += mx * speed;
                 mouseAccumY += my * speed;
+                LONG dx = static_cast<LONG>(mouseAccumX);
+                LONG dy = static_cast<LONG>(mouseAccumY);
+                if (dx != 0 || dy != 0) {
+                    mouseAccumX -= static_cast<float>(dx);
+                    mouseAccumY -= static_cast<float>(dy);
+                    INPUT inp = {};
+                    inp.type       = INPUT_MOUSE;
+                    inp.mi.dwFlags = MOUSEEVENTF_MOVE;
+                    inp.mi.dx      = dx;
+                    inp.mi.dy      = dy;
+                    SendInput(1, &inp, sizeof(INPUT));
+                }
+            }
+
+            // --- Touchpad delta mouse (no dead zone — real finger movement, not velocity) ---
+            if (cfg->touchpad.mouseEnabled &&
+                (state.touchDeltaX != 0.0f || state.touchDeltaY != 0.0f)) {
+                constexpr float kTouchpadScale = 1.5f;
+                mouseAccumX += state.touchDeltaX * kTouchpadScale;
+                mouseAccumY += state.touchDeltaY * kTouchpadScale;
                 LONG dx = static_cast<LONG>(mouseAccumX);
                 LONG dy = static_cast<LONG>(mouseAccumY);
                 if (dx != 0 || dy != 0) {

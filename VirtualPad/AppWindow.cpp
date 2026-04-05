@@ -60,9 +60,11 @@ int AppWindow::run() {
         m_controllerConfigs = loadControllerConfigs("data/controllers.json");
     } catch (...) {}   // optional — scanner falls back to WinMM names if missing
 
-    try {
-        m_padLayouts = loadPadLayouts("data/pad_layouts.json");
-    } catch (...) {}   // optional — PadView uses default layout if missing
+    try { m_padLayouts = loadPadLayouts("data/pad_layouts.json"); } catch (...) {}
+    if (m_padLayouts.empty()) {
+        try { m_padLayouts = loadPadLayouts("data/pad_layouts.json.bak"); } catch (...) {}
+        m_layoutsFromBackup = !m_padLayouts.empty();
+    }
 
     // Discover game profiles in data/ (any .json that has a profile_name field)
     m_profilePaths.clear();
@@ -90,6 +92,7 @@ int AppWindow::run() {
 
     m_padView.load(m_device);
     m_virtualPadView.load(m_device);
+    m_layoutEditor.init(m_device, &m_padLayouts);
 
     m_engine.start();
 
@@ -155,6 +158,7 @@ void AppWindow::renderFrame() {
         if (ImGui::BeginTabItem("Engine"))  { renderEngineTab();  ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem("Scanner")) { renderScannerTab(); ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem("Pads"))    { renderPadsTab();    ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("Layout"))  { renderLayoutTab();  ImGui::EndTabItem(); }
         ImGui::EndTabBar();
     }
 
@@ -213,7 +217,8 @@ void AppWindow::renderEngineTab() {
     } else {
         for (int i = 0; i < (int)displayList.size(); ++i) {
             const auto& dev = displayList[i];
-            const ControllerConfig* cfg = findConfig(m_controllerConfigs, dev.vid, dev.pid);
+            const ControllerConfig* cfg = findConfig(m_controllerConfigs, dev.vid, dev.pid,
+                                                     dev.connectionType);
             const char* displayName = cfg ? cfg->source_name.c_str() : dev.name.c_str();
             const char* src = (dev.source == DeviceCandidate::Source::HID) ? "HID" : "WinMM";
 
@@ -530,7 +535,8 @@ void AppWindow::renderScannerTab() {
     // ── HID device live monitor ───────────────────────────────────────────
     if (m_hidSelected >= 0 && m_hidSelected < (int)m_hidDevices.size()) {
         const auto& hdev = m_hidDevices[m_hidSelected];
-        const ControllerConfig* cfg = findConfig(m_controllerConfigs, hdev.vid, hdev.pid);
+        const ControllerConfig* cfg = findConfig(m_controllerConfigs, hdev.vid, hdev.pid,
+                                                 hdev.connectionType);
 
         // Header
         ImGui::Spacing();
@@ -920,7 +926,33 @@ void AppWindow::renderPadsTab() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Layout tab
+// ---------------------------------------------------------------------------
+
+void AppWindow::renderLayoutTab() {
+    ImGui::Spacing();
+
+    if (m_layoutsFromBackup) {
+        ImGui::TextColored({ 1.0f, 0.7f, 0.1f, 1.0f },
+            "AVISO: pad_layouts.json fallo al cargar. Usando copia de seguridad (.bak).");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+    }
+
+    m_layoutEditor.render();
+
+    if (m_layoutEditor.pollControllersSaved()) {
+        m_controllerConfigs = loadControllerConfigs("data/controllers.json");
+        m_engine.reloadConfigs();
+    }
+}
+
+// ---------------------------------------------------------------------------
+
 void AppWindow::cleanup() {
+    m_layoutEditor.unload();
     m_virtualPadView.unload();
     m_padView.unload();
     cleanupRenderTarget();

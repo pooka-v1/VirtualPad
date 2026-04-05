@@ -4,6 +4,7 @@
 #include <string>
 #include "../GamepadState.h"
 #include "PadLayout.h"
+#include "../imgui/imgui.h"
 
 // RAII wrapper for a single D3D11 shader resource view loaded from a PNG.
 struct PadTexture {
@@ -35,8 +36,25 @@ public:
     // Ignored if layout.id is unchanged.
     void setLayout(const PadLayout& layout);
 
+    // Like setLayout but always applies the new layout regardless of the id.
+    // Use when the component list has changed but the id is the same.
+    void forceSetLayout(const PadLayout& layout);
+
+    // Update component positions/properties without reloading textures.
+    // Safe to call every frame during drag operations.
+    void updateLayout(const PadLayout& layout);
+
     // Render the pad view inside the current ImGui window at the current cursor position.
-    void render(const GamepadState& state);
+    // selectedComp: index of component to draw a selection highlight on (-1 = none).
+    void render(const GamepadState& state, int selectedComp = -1);
+
+    // Returns the natural pixel size of a loaded texture, or false if not found.
+    bool getTextureSize(const std::string& name, int& w, int& h) const;
+
+    // Returns the index of the topmost component at the given screen position, or -1.
+    // canvasOrigin must be the screen-space position of the canvas top-left corner,
+    // as returned by ImGui::GetCursorScreenPos() before calling render().
+    int hitTest(ImVec2 mousePos, ImVec2 canvasOrigin) const;
 
     // Release all D3D11 resources. Call before releasing the D3D device.
     void unload();

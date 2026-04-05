@@ -416,6 +416,92 @@ This means:
 
 ---
 
+## Layout Editor
+
+The **Layout** tab provides a visual editor for `data/pad_layouts.json`.
+
+### Opening a layout
+
+Click any layout name in the left panel to open it in the editor immediately.
+If there are unsaved changes, a confirmation dialog appears before switching.
+
+### Canvas interactions
+
+| Action | Result |
+|---|---|
+| **Single click** on a component | Selects it (highlighted in yellow). Properties appear in the right panel. |
+| **Click + drag** | Moves the selected component freely on the canvas. |
+| **Arrow keys** (with canvas focused) | Nudge 1 pixel per key press. |
+
+### Three panels
+
+**Left panel** — layout list, element list, and add/delete controls:
+- `[+ Button]` `[+ Dpad]` `[+ Analog]` `[+ Decoration]` — add a component of that type.
+- `[Delete element]` — removes the selected component.
+- `[Save]` / `[Discard]` — save to `pad_layouts.json` (creates a `.bak` backup on first save if none exists) or discard all changes.
+- `[Pair controller]` — launches the Controller Binding Wizard (see below).
+
+**Center panel** — canvas showing the pad layout at scale. Zones FRONT (bottom strip) and TOP (main area) are displayed with their components rendered live.
+
+**Right panel** — properties of the selected component:
+- **Position** `cx` / `cy` and **Size** `w` / `h` — numeric fields. Lock aspect ratio with the checkbox next to each pair.
+- **Image / Overlay** — combo boxes filtered by subfolder (`templates/`, `buttons/`, `cross/`, `analogics/`, `decorations/`). Selecting an image auto-fills the size from the image dimensions.
+- **State bindings** — `state`, `state_x`, `state_y`, `state_click`, `state_up/down/left/right` — combo boxes showing known `GamepadState` field names.
+- **Colors** — active/inactive colors for the base image and the overlay.
+
+### Dirty tracking
+
+A `*` indicator appears when there are unsaved changes. Switching layouts or closing the editor without saving triggers a confirmation dialog.
+
+---
+
+## Controller Binding Wizard
+
+The **Pair controller** button in the Layout Editor launches a step-by-step wizard to map a physical controller to the open layout and generate the corresponding entry in `data/controllers.json`.
+
+### How it works
+
+The wizard guides you through five stages:
+
+1. **Select controller** — lists all detected physical devices (WinMM and HID). The ViGEm virtual controller is automatically filtered out.
+2. **Name controller** — enter a friendly name. For WinMM controllers, toggle DInput ↔ XInput mode.
+3. **Bind buttons** — for each button/trigger/stick-click in the layout, the wizard prompts you to press the corresponding physical button. A number overlay appears on the layout canvas as each button is bound.
+4. **Bind axes and triggers** — for each analog axis (left stick X/Y, right stick X/Y) and trigger (L2, R2), the wizard prompts you to move the physical control. Axis direction and inversion are detected automatically.
+   - For **left stick X**: push fully to the **right**.
+   - For **left stick Y**: push fully **down**.
+   - For **right stick X/Y**: same convention.
+   - For **triggers**: press fully.
+5. **Review** — shows all bound buttons, axes, and D-pad. Confirm to save or restart from the name step.
+
+### Result
+
+Saving writes or replaces the entry in `data/controllers.json` by VID/PID. The Pads tab reloads the configuration automatically.
+
+### State map (`data/state_map.json`)
+
+The wizard uses `state_map.json` to know which physical button name (`physical`), which axis target (`axis_target`), and which prompt to show for each `GamepadState` field. Components whose `state` field has no entry in the state map are skipped silently.
+
+```json
+{
+  "state_map": {
+    "btnA":    { "physical": "a",   "type": "button" },
+    "leftX":   { "type": "axis",    "axis_target": "left_x",
+                 "prompt": "Push the left stick to the RIGHT",
+                 "invert_if_positive": false },
+    "dpadUp":  { "type": "dpad",    "direction": "up" }
+  }
+}
+```
+
+### Known issues (in progress)
+
+| Issue | Status |
+|---|---|
+| Left analog stick X axis capture may fail (pushing right not detected) | Under investigation |
+| Pads tab does not refresh until app restart after wizard saves | Under investigation |
+
+---
+
 ## Data files
 
 | File | Description |

@@ -87,6 +87,23 @@ bool PadView::load(ID3D11Device* device) {
     return true;
 }
 
+void PadView::forceSetLayout(const PadLayout& layout) {
+    std::string savedId = m_layout.id;
+    m_layout.id = "";   // defeat the id-cache check in setLayout
+    setLayout(layout);
+    if (m_layout.id.empty())        // setLayout didn't touch it (device not ready)
+        m_layout.id = savedId;
+}
+
+void PadView::updateLayout(const PadLayout& layout) {
+    // Update geometry/bindings without touching the texture cache.
+    m_layout.W          = layout.W;
+    m_layout.FrontH     = layout.FrontH;
+    m_layout.TopH       = layout.TopH;
+    m_layout.components = layout.components;
+    // m_layout.id intentionally left unchanged so setLayout still skips reloads.
+}
+
 void PadView::setLayout(const PadLayout& layout) {
     if (!m_device || !m_loaded) { m_layout = layout; return; }
     if (layout.id == m_layout.id) return;
@@ -157,8 +174,11 @@ static bool resolveState(const GamepadState& s, const std::string& name, float t
     if (name == "dpadDown")  return s.dpadDown;
     if (name == "dpadLeft")  return s.dpadLeft;
     if (name == "dpadRight") return s.dpadRight;
-    if (name == "triggerL")  return s.triggerL > threshold;
-    if (name == "triggerR")  return s.triggerR > threshold;
+    if (name == "triggerL")    return s.triggerL > threshold;
+    if (name == "triggerR")    return s.triggerR > threshold;
+    if (name == "btnTouch")    return s.btnTouch;
+    if (name == "touch1Active") return s.touch1Active;
+    if (name == "touch2Active") return s.touch2Active;
     return false;
 }
 
@@ -169,6 +189,10 @@ static float resolveFloat(const GamepadState& s, const std::string& name) {
     if (name == "rightY")   return s.rightY;
     if (name == "triggerL") return s.triggerL;
     if (name == "triggerR") return s.triggerR;
+    if (name == "touch1X")  return s.touch1X;
+    if (name == "touch1Y")  return s.touch1Y;
+    if (name == "touch2X")  return s.touch2X;
+    if (name == "touch2Y")  return s.touch2Y;
     return 0.0f;
 }
 
@@ -186,7 +210,38 @@ const PadTexture* PadView::getTex(const std::string& name) const {
 // render
 // ---------------------------------------------------------------------------
 
-void PadView::render(const GamepadState& state) {
+bool PadView::getTextureSize(const std::string& name, int& w, int& h) const {
+    const PadTexture* t = getTex(name);
+    if (!t) return false;
+    w = t->w;
+    h = t->h;
+    return true;
+}
+
+int PadView::hitTest(ImVec2 mousePos, ImVec2 origin) const {
+    const PadLayout& L = m_layout;
+    // Iterate in reverse so the topmost-drawn component (highest index) is tested first.
+    for (int i = (int)L.components.size() - 1; i >= 0; --i) {
+        const PadComponent& c = L.components[i];
+        float hw, hh;
+        if (c.type == "stick") {
+            hw = hh = c.size > 0.0f ? c.size * 0.5f : 20.0f;
+        } else if (c.type == "dpad") {
+            hw = hh = 40.0f;
+        } else {
+            hw = c.w > 0.0f ? c.w * 0.5f : 20.0f;
+            hh = c.h > 0.0f ? c.h * 0.5f : 20.0f;
+        }
+        float sx = origin.x + c.cx;
+        float sy = origin.y + c.cy;
+        if (mousePos.x >= sx - hw && mousePos.x <= sx + hw &&
+            mousePos.y >= sy - hh && mousePos.y <= sy + hh)
+            return i;
+    }
+    return -1;
+}
+
+void PadView::render(const GamepadState& state, int selectedComp) {
     if (!m_loaded) {
         ImGui::TextDisabled("Assets not loaded.");
         return;
@@ -251,6 +306,27 @@ void PadView::render(const GamepadState& state) {
                 img(*t, c.cx, c.cy, dw, dh, col);
             }
         }
+        else if (c.type == "touchpad") {
+            // Background image (the physical touchpad surface)
+            bool clicked = state.btnTouch;
+            const PadTexture* t = getTex(c.image);
+            if (t) img(*t, c.cx, c.cy, c.w, c.h, clicked ? activeCol : col);
+
+            // Finger dots — drawn in touchpad-local coordinates
+            float padL = origin.x + c.cx - c.w * 0.5f;
+            float padT = origin.y + c.cy - c.h * 0.5f;
+            constexpr float kDotR = 7.0f;
+
+            auto drawFinger = [&](float normX, float normY, ImU32 fillColor) {
+                ImVec2 pos = { padL + normX * c.w, padT + normY * c.h };
+                dl->AddCircleFilled(pos, kDotR, fillColor);
+                dl->AddCircle(pos, kDotR, IM_COL32(255, 255, 255, 200), 16, 1.5f);
+            };
+            if (state.touch1Active)
+                drawFinger(state.touch1X, state.touch1Y, IM_COL32(80, 180, 255, 220));  // azul
+            if (state.touch2Active)
+                drawFinger(state.touch2X, state.touch2Y, IM_COL32(255, 140, 60, 220));  // naranja
+        }
         else if (c.type == "dpad") {
             // Each arm is sized to its texture's natural dimensions, offset from the dpad center.
             auto drawArm = [&](const std::string& imgName, const std::string& stName,
@@ -269,6 +345,31 @@ void PadView::render(const GamepadState& state) {
             if (tLeft)  drawArm(c.imageLeft,  c.stateLeft,  c.cx - tLeft->w  * 0.5f,       c.cy);
             if (tRight) drawArm(c.imageRight, c.stateRight, c.cx + tRight->w * 0.5f,       c.cy);
         }
+    }
+
+    // Selection highlight (editor use)
+    if (selectedComp >= 0 && selectedComp < (int)L.components.size()) {
+        const PadComponent& c = L.components[selectedComp];
+        float hw, hh;
+        if (c.type == "stick") {
+            hw = hh = c.size > 0.0f ? c.size * 0.5f : 20.0f;
+        } else if (c.type == "dpad") {
+            hw = hh = 40.0f;
+        } else {
+            hw = c.w > 0.0f ? c.w * 0.5f : 20.0f;
+            hh = c.h > 0.0f ? c.h * 0.5f : 20.0f;
+        }
+        ImVec2 p0 = { origin.x + c.cx - hw, origin.y + c.cy - hh };
+        ImVec2 p1 = { origin.x + c.cx + hw, origin.y + c.cy + hh };
+        dl->AddRect(p0, p1, IM_COL32(255, 220, 0, 220), 2.0f, 0, 2.0f);
+        // Corner handles
+        constexpr float hSz = 4.0f;
+        auto corner = [&](float x, float y) {
+            dl->AddRectFilled({ x - hSz, y - hSz }, { x + hSz, y + hSz },
+                              IM_COL32(255, 220, 0, 255));
+        };
+        corner(p0.x, p0.y); corner(p1.x, p0.y);
+        corner(p0.x, p1.y); corner(p1.x, p1.y);
     }
 
     // Advance ImGui layout cursor past the drawn area.

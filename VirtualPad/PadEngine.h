@@ -29,14 +29,15 @@ struct PadEvent {
 struct DeviceCandidate {
     enum class Source { WinMM, HID };
 
-    Source      source  = Source::WinMM;
-    UINT        port    = UINT_MAX;   // WinMM only
-    std::string hidPath;              // HID only
-    WORD        vid     = 0;
-    WORD        pid     = 0;
+    Source      source         = Source::WinMM;
+    UINT        port           = UINT_MAX;   // WinMM only
+    std::string hidPath;                     // HID only
+    WORD        vid            = 0;
+    WORD        pid            = 0;
     std::string name;
-    UINT        axes    = 0;
-    UINT        buttons = 0;
+    std::string connectionType;              // "usb" / "bt" / "" (WinMM)
+    UINT        axes           = 0;
+    UINT        buttons        = 0;
 };
 
 enum class EnginePhase {
@@ -87,6 +88,9 @@ public:
     // Mouse speed (pixels/tick at full stick deflection) — set from UI slider
     void  setMouseSpeed(float s);
     float getMouseSpeed() const;
+
+    // Reload controllers.json from disk (call after wizard saves a new entry).
+    void reloadConfigs();
 
 private:
     void threadFunc();

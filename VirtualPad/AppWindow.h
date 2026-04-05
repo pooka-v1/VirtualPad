@@ -11,6 +11,7 @@
 #include "config/ConfigLoader.h"
 #include "GamepadState.h"
 #include "ui/PadView.h"
+#include "ui/LayoutEditor.h"
 
 // Manages the Win32 window, Direct3D 11 device, and ImGui context.
 // Call run() from the main thread — it blocks until the window is closed.
@@ -37,6 +38,7 @@ private:
     void renderEngineTab();
     void renderScannerTab();
     void renderPadsTab();
+    void renderLayoutTab();
 
     // --- Win32 window procedure ---
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -91,4 +93,9 @@ private:
     PadView m_padView;                          // physical controller
     PadView m_virtualPadView;                   // virtual Xbox One output
     bool    m_virtualPadInitialized = false;    // xbox_one layout loaded once
+
+    // --- Layout editor ---
+    LayoutEditor m_layoutEditor;
+    bool         m_layoutEditorInitialized = false;
+    bool         m_layoutsFromBackup       = false;  // true when .bak was the fallback
 };

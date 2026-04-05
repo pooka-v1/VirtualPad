@@ -416,6 +416,92 @@ Esto significa:
 
 ---
 
+## Editor de layouts
+
+La pestaña **Layout** proporciona un editor visual para `data/pad_layouts.json`.
+
+### Abrir un layout
+
+Haz clic en cualquier nombre de layout en el panel izquierdo para abrirlo en el editor de inmediato.
+Si hay cambios sin guardar, aparece un diálogo de confirmación antes de cambiar.
+
+### Interacciones en el canvas
+
+| Acción | Resultado |
+|---|---|
+| **Un clic** sobre un componente | Lo selecciona (resaltado en amarillo). Sus propiedades aparecen en el panel derecho. |
+| **Clic + arrastrar** | Mueve el componente seleccionado libremente sobre el canvas. |
+| **Teclas de dirección** (con el canvas enfocado) | Desplaza 1 píxel por pulsación. |
+
+### Tres paneles
+
+**Panel izquierdo** — lista de layouts, lista de elementos y controles de añadir/borrar:
+- `[+ Botón]` `[+ Cruceta]` `[+ Analógico]` `[+ Decoración]` — añade un componente de ese tipo.
+- `[Eliminar elemento]` — borra el componente seleccionado.
+- `[Guardar]` / `[Descartar]` — guarda en `pad_layouts.json` (crea un `.bak` automático en el primer guardado si no existe) o descarta todos los cambios.
+- `[Emparejar mando]` — lanza el Asistente de emparejamiento (ver más abajo).
+
+**Panel central** — canvas con el layout a escala. Se muestran las zonas FRONT (franja inferior) y TOP (área principal) con sus componentes renderizados en vivo.
+
+**Panel derecho** — propiedades del componente seleccionado:
+- **Posición** `cx` / `cy` y **Tamaño** `w` / `h` — campos numéricos. El checkbox junto a cada par bloquea la proporción de aspecto.
+- **Imagen / Overlay** — combos filtrados por subcarpeta (`templates/`, `buttons/`, `cross/`, `analogics/`, `decorations/`). Seleccionar una imagen rellena automáticamente el tamaño con las dimensiones de la imagen.
+- **State bindings** — `state`, `state_x`, `state_y`, `state_click`, `state_up/down/left/right` — combos con los nombres de campo de `GamepadState`.
+- **Colores** — colores activo/inactivo para la imagen base y el overlay.
+
+### Control de cambios
+
+Un indicador `*` aparece cuando hay cambios sin guardar. Cambiar de layout sin guardar activa un diálogo de confirmación.
+
+---
+
+## Asistente de emparejamiento de mando
+
+El botón **Emparejar mando** del Editor de layouts lanza un asistente paso a paso para mapear un mando físico al layout abierto y generar la entrada correspondiente en `data/controllers.json`.
+
+### Cómo funciona
+
+El asistente guía a través de cinco etapas:
+
+1. **Seleccionar mando** — lista todos los dispositivos físicos detectados (WinMM y HID). El mando virtual de ViGEm se filtra automáticamente.
+2. **Nombrar mando** — introduce un nombre descriptivo. Para mandos WinMM, alterna entre modo DInput y XInput.
+3. **Asignar botones** — para cada botón, gatillo y clic de stick del layout, el asistente pide que pulses el botón físico correspondiente. A medida que se asigna cada botón, aparece su número superpuesto en el canvas.
+4. **Asignar ejes y gatillos** — para cada eje analógico (stick izquierdo X/Y, stick derecho X/Y) y gatillo (L2, R2), el asistente pide que muevas el control físico. La dirección e inversión del eje se detectan automáticamente.
+   - **Stick izquierdo X**: empuja totalmente hacia la **derecha**.
+   - **Stick izquierdo Y**: empuja totalmente hacia **abajo**.
+   - **Stick derecho X/Y**: mismo convenio.
+   - **Gatillos**: aprieta completamente.
+5. **Revisión** — muestra todos los botones, ejes y cruceta asignados. Confirma para guardar o reinicia desde el paso de nombre.
+
+### Resultado
+
+Al guardar, se escribe o reemplaza la entrada en `data/controllers.json` por VID/PID. La pestaña Pads recarga la configuración automáticamente.
+
+### Mapa de estados (`data/state_map.json`)
+
+El asistente usa `state_map.json` para saber el nombre físico del botón (`physical`), el target del eje (`axis_target`) y el texto de instrucción a mostrar para cada campo de `GamepadState`. Los componentes cuyo campo `state` no tenga entrada en el mapa se omiten en silencio.
+
+```json
+{
+  "state_map": {
+    "btnA":    { "physical": "a",   "type": "button" },
+    "leftX":   { "type": "axis",    "axis_target": "left_x",
+                 "prompt": "Empuja el stick izquierdo a la DERECHA",
+                 "invert_if_positive": false },
+    "dpadUp":  { "type": "dpad",    "direction": "up" }
+  }
+}
+```
+
+### Problemas conocidos (en progreso)
+
+| Problema | Estado |
+|---|---|
+| El eje X del stick analógico izquierdo puede no capturarse (empujar a la derecha no calibra) | En investigación |
+| La pestaña Pads no se refresca hasta reiniciar la app después de que el asistente guarda | En investigación |
+
+---
+
 ## Archivos de datos
 
 | Archivo | Descripción |

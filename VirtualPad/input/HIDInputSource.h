@@ -36,6 +36,9 @@ private:
     int              m_readCount      = 0;
     int              m_btnErrCount    = 0;
     BYTE             m_buttonReportId = 0xFF; // report ID in descriptor for buttons (0xFF = unknown)
+    float            m_lastTouchX     = 0.0f;
+    float            m_lastTouchY     = 0.0f;
+    bool             m_lastTouchActive = false;
 
     struct ValueRange { LONG logMin; LONG logMax; USHORT bitSize; };
     std::unordered_map<USHORT, ValueRange> m_valueCaps; // HID usage → logical range
@@ -45,6 +48,7 @@ private:
     static AxisUsage usageFromAxisName(const std::string& name);
     float            normalizeHIDAxis(USHORT usage, ULONG rawValue) const;
     static void   parseHIDDpad(ULONG hatValue, bool& up, bool& down, bool& left, bool& right);
-    void          applyButtons(PCHAR buf, ULONG bufLen, GamepadState& state);
-    void          applyAxes   (PCHAR buf, ULONG bufLen, GamepadState& state);
+    void          applyButtons (PCHAR buf, ULONG bufLen,    GamepadState& state);
+    void          applyAxes    (PCHAR buf, ULONG bufLen,    GamepadState& state);
+    void          applyTouchpad(PCHAR buf, ULONG bytesRead, GamepadState& state);
 };

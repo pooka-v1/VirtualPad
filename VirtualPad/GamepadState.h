@@ -57,4 +57,15 @@ struct GamepadState {
     bool btnR4 = false;   // paddle corto derecho   (al lado del R1)
     bool btnLP = false;   // paddle largo izquierdo (Lp / L5)
     bool btnRP = false;   // paddle largo derecho   (Rp / R5)
+
+    // --- Touchpad (DS4-style physical touchpad) ---
+    bool  btnTouch     = false;  // physical touchpad press
+    bool  touch1Active = false;  // finger 1 on pad surface
+    float touch1X      = 0.0f;   // finger 1 absolute X position [0..1]
+    float touch1Y      = 0.0f;   // finger 1 absolute Y position [0..1]
+    bool  touch2Active = false;  // finger 2 on pad surface
+    float touch2X      = 0.0f;   // finger 2 absolute X position [0..1]
+    float touch2Y      = 0.0f;   // finger 2 absolute Y position [0..1]
+    float touchDeltaX  = 0.0f;   // finger 1 delta for mouse routing (derived each frame)
+    float touchDeltaY  = 0.0f;
 };
