@@ -53,12 +53,10 @@
           "virtual": "r3"
         },
         "17": {
-          "physical": "l4",
-          "virtual": "r1"
+          "physical": "l4"
         },
         "18": {
-          "physical": "r4",
-          "virtual": "l1"
+          "physical": "r4"
         },
         "2": {
           "physical": "a",
@@ -230,7 +228,12 @@
           "virtual": "a"
         },
         "3": {
-          "physical": "rp"
+          "keys": [
+            "ctrl",
+            "v"
+          ],
+          "physical": "rp",
+          "type": "keyboard"
         },
         "4": {
           "physical": "x",
@@ -241,7 +244,12 @@
           "virtual": "x"
         },
         "6": {
-          "physical": "lp"
+          "keys": [
+            "ctrl",
+            "c"
+          ],
+          "physical": "lp",
+          "type": "keyboard"
         },
         "7": {
           "physical": "l1",

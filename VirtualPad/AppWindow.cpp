@@ -63,6 +63,13 @@ int AppWindow::run() {
         m_controllerConfigs = loadControllerConfigs("data/controllers.json");
     } catch (...) {}   // optional — scanner falls back to WinMM names if missing
 
+    try {
+        VirtualPadConfig vpCfg = loadVirtualPadConfig("data/virtualpad.json");
+        m_acceptedXboxButtons = vpCfg.acceptedXboxButtons;
+    } catch (...) {
+        m_acceptedXboxButtons = {"a","b","x","y","l1","r1","select","start","home","l3","r3"};
+    }
+
     try { m_padLayouts = loadPadLayouts("data/pad_layouts.json"); } catch (...) {}
     if (m_padLayouts.empty()) {
         try { m_padLayouts = loadPadLayouts("data/pad_layouts.json.bak"); } catch (...) {}
@@ -985,6 +992,57 @@ void AppWindow::renderPadsTab() {
 // ---------------------------------------------------------------------------
 
 // Tabla de traducción: nombre corto de controllers.json ↔ nombre de campo en GamepadState/layout
+// Returns the key name string compatible with keyNameToVK(), or "" if not mappable.
+// Display name (second element) is what we show the user.
+static std::pair<const char*, const char*> imguiKeyToKeyName(ImGuiKey k) {
+    switch (k) {
+    case ImGuiKey_F1:  return {"f1","F1"};   case ImGuiKey_F2:  return {"f2","F2"};
+    case ImGuiKey_F3:  return {"f3","F3"};   case ImGuiKey_F4:  return {"f4","F4"};
+    case ImGuiKey_F5:  return {"f5","F5"};   case ImGuiKey_F6:  return {"f6","F6"};
+    case ImGuiKey_F7:  return {"f7","F7"};   case ImGuiKey_F8:  return {"f8","F8"};
+    case ImGuiKey_F9:  return {"f9","F9"};   case ImGuiKey_F10: return {"f10","F10"};
+    case ImGuiKey_F11: return {"f11","F11"}; case ImGuiKey_F12: return {"f12","F12"};
+    case ImGuiKey_Space:     return {"space",    "Space"};
+    case ImGuiKey_Enter:     return {"enter",    "Enter"};
+    case ImGuiKey_Escape:    return {"esc",      "Esc"};
+    case ImGuiKey_Tab:       return {"tab",      "Tab"};
+    case ImGuiKey_Backspace: return {"backspace","Backspace"};
+    case ImGuiKey_Delete:    return {"delete",   "Delete"};
+    case ImGuiKey_Insert:    return {"insert",   "Insert"};
+    case ImGuiKey_Home:      return {"home_key", "Home"};
+    case ImGuiKey_End:       return {"end",      "End"};
+    case ImGuiKey_PageUp:    return {"pageup",   "PageUp"};
+    case ImGuiKey_PageDown:  return {"pagedown", "PageDown"};
+    case ImGuiKey_UpArrow:   return {"up",   "↑"};
+    case ImGuiKey_DownArrow: return {"down", "↓"};
+    case ImGuiKey_LeftArrow: return {"left", "←"};
+    case ImGuiKey_RightArrow:return {"right","→"};
+    case ImGuiKey_LeftCtrl:  case ImGuiKey_RightCtrl:  return {"ctrl", "Ctrl"};
+    case ImGuiKey_LeftShift: case ImGuiKey_RightShift: return {"shift","Shift"};
+    case ImGuiKey_LeftAlt:   case ImGuiKey_RightAlt:   return {"alt",  "Alt"};
+    case ImGuiKey_LeftSuper: case ImGuiKey_RightSuper: return {"win",  "Win"};
+    case ImGuiKey_A: return {"a","A"}; case ImGuiKey_B: return {"b","B"};
+    case ImGuiKey_C: return {"c","C"}; case ImGuiKey_D: return {"d","D"};
+    case ImGuiKey_E: return {"e","E"}; case ImGuiKey_F: return {"f","F"};
+    case ImGuiKey_G: return {"g","G"}; case ImGuiKey_H: return {"h","H"};
+    case ImGuiKey_I: return {"i","I"}; case ImGuiKey_J: return {"j","J"};
+    case ImGuiKey_K: return {"k","K"}; case ImGuiKey_L: return {"l","L"};
+    case ImGuiKey_M: return {"m","M"}; case ImGuiKey_N: return {"n","N"};
+    case ImGuiKey_O: return {"o","O"}; case ImGuiKey_P: return {"p","P"};
+    case ImGuiKey_Q: return {"q","Q"}; case ImGuiKey_R: return {"r","R"};
+    case ImGuiKey_S: return {"s","S"}; case ImGuiKey_T: return {"t","T"};
+    case ImGuiKey_U: return {"u","U"}; case ImGuiKey_V: return {"v","V"};
+    case ImGuiKey_W: return {"w","W"}; case ImGuiKey_X: return {"x","X"};
+    case ImGuiKey_Y: return {"y","Y"}; case ImGuiKey_Z: return {"z","Z"};
+    case ImGuiKey_0: return {"0","0"}; case ImGuiKey_1: return {"1","1"};
+    case ImGuiKey_2: return {"2","2"}; case ImGuiKey_3: return {"3","3"};
+    case ImGuiKey_4: return {"4","4"}; case ImGuiKey_5: return {"5","5"};
+    case ImGuiKey_6: return {"6","6"}; case ImGuiKey_7: return {"7","7"};
+    case ImGuiKey_8: return {"8","8"}; case ImGuiKey_9: return {"9","9"};
+    default: return {"", ""};
+    }
+}
+
 static bool isStateActive(const GamepadState& s, const std::string& n) {
     if (n == "btnA")     return s.btnA;
     if (n == "btnB")     return s.btnB;
@@ -1059,13 +1117,23 @@ static void activateState(GamepadState& s, const std::string& name) {
 
 void AppWindow::reloadMappingEdits() {
     m_mappingEdits.clear();
+    m_h5ActionEdits.clear();
     for (const auto& cfg : m_controllerConfigs) {
         if (cfg.vid == m_mappingActiveVid && cfg.pid == m_mappingActivePid) {
             for (const auto& [idx, action] : cfg.buttons) {
-                if (action.type == ButtonActionType::VirtualButton &&
-                    !action.physical.empty() && !action.name.empty() &&
-                    action.physical != action.name)
-                    m_mappingEdits[action.physical] = action.name;
+                if (action.physical.empty()) continue;
+                switch (action.type) {
+                case ButtonActionType::VirtualButton:
+                    if (!action.name.empty() && action.physical != action.name)
+                        m_mappingEdits[action.physical] = action.name;
+                    break;
+                case ButtonActionType::Keyboard:
+                case ButtonActionType::MouseClick:
+                case ButtonActionType::Macro:
+                    m_h5ActionEdits[action.physical] = action;
+                    break;
+                default: break;
+                }
             }
             break;
         }
@@ -1088,15 +1156,15 @@ void AppWindow::renderMappingSubtab() {
     float  dt           = ImGui::GetIO().DeltaTime;
 
     // ── H9: lógica de mapping desde el mando ─────────────────────────────────
+    GamepadState physNow = m_engine.getLastState();
     {
-        GamepadState physNow = m_engine.getLastState();
         const auto& physComps = m_padView.getLayout().components;
 
         if (m_h9ErrorTimer > 0.0f)
             m_h9ErrorTimer -= dt;
 
         if (m_mappingSelPhysComp < 0) {
-            // Paso 1: detectar botón mantenido 2s → seleccionarlo
+            // Paso 1: detectar botón mantenido 1s → seleccionarlo
             int activeComp = -1;
             for (int i = 0; i < (int)physComps.size(); ++i) {
                 if (physComps[i].type != "button") continue;
@@ -1110,6 +1178,7 @@ void AppWindow::renderMappingSubtab() {
                     m_h9HoldTimer += dt;
                     if (m_h9HoldTimer >= 1.0f) {
                         m_mappingSelPhysComp = activeComp;
+                        m_h5ActionType = H5ActionType::Xbox;  // siempre empezar en modo Xbox
                         m_h9HoldComp  = -1;
                         m_h9HoldTimer = 0.0f;
                     }
@@ -1118,10 +1187,10 @@ void AppWindow::renderMappingSubtab() {
                 m_h9HoldComp  = -1;
                 m_h9HoldTimer = 0.0f;
             }
-        } else {
-            // Paso 2: detectar rising edge en botón diferente → asignar
-            static const char* kInvalidVirt[] = { "l4", "r4", "lp", "rp", "touch_btn" };
+        } else if (m_h5ActionType == H5ActionType::Xbox) {
+            // Paso 2 (solo modo Xbox): detectar rising edge → asignar botón virtual
             const std::string& selState = physComps[m_mappingSelPhysComp].state;
+            std::string physShort = stateToShort(selState);
 
             for (int i = 0; i < (int)physComps.size(); ++i) {
                 if (physComps[i].type != "button") continue;
@@ -1131,14 +1200,12 @@ void AppWindow::renderMappingSubtab() {
                 if (!isActive || wasActive) continue;  // solo rising edge
 
                 std::string virtShort = stateToShort(compState);
-                bool invalid = false;
-                for (auto* s : kInvalidVirt) if (virtShort == s) { invalid = true; break; }
+                bool valid = false;
+                for (const auto& s : m_acceptedXboxButtons) if (virtShort == s) { valid = true; break; }
 
-                if (invalid) {
-                    m_h9ErrorTimer = 2.0f;
-                } else {
-                    std::string physShort = stateToShort(selState);
-                    if (!physShort.empty() && !virtShort.empty()) {
+                if (valid) {
+                    if (!physShort.empty()) {
+                        m_h5ActionEdits.erase(physShort);
                         auto it = m_mappingEdits.find(physShort);
                         bool alreadyAssigned = (it != m_mappingEdits.end() && it->second == virtShort);
                         m_mappingEdits[physShort] = alreadyAssigned ? "" : virtShort;
@@ -1147,6 +1214,20 @@ void AppWindow::renderMappingSubtab() {
                         m_mappingFlashTimer = alreadyAssigned ? 0.0f : 0.5f;
                     }
                     m_mappingSelPhysComp = -1;
+                    m_h5ActionType = H5ActionType::Xbox;
+                } else {
+                    // Botón sin equivalente Xbox — si el fuente tiene asignación, la borramos.
+                    // Si no tiene nada, mostramos error.
+                    bool hasAssignment = m_h5ActionEdits.count(physShort) > 0 ||
+                        (m_mappingEdits.count(physShort) && !m_mappingEdits.at(physShort).empty());
+                    if (hasAssignment && !physShort.empty()) {
+                        m_mappingEdits[physShort] = "";  // marca la entrada como "borrada" para que save la procese
+                        m_h5ActionEdits.erase(physShort);
+                        m_mappingSelPhysComp = -1;
+                        m_h5ActionType = H5ActionType::Xbox;
+                    } else {
+                        m_h9ErrorTimer = 2.0f;
+                    }
                 }
                 break;
             }
@@ -1250,8 +1331,12 @@ void AppWindow::renderMappingSubtab() {
             msg = "Mantén pulsado para seleccionar";
         } else if (m_mappingSelPhysComp < 0) {
             msg = "Elige el botón que quieres reasignar";
+        } else if (m_h5ActionType == H5ActionType::Keyboard) {
+            msg = m_h5CaptureKeys.empty()
+                ? "Pulsa las teclas del combo  (L1+R1 o A+B para cancelar)"
+                : "Pulsa m\xC3\xA1s teclas o haz clic en Asignar";
         } else {
-            msg = "Elige dónde lo quieres asignar en el virtual";
+            msg = "Elige en el virtual o pulsa el botón físico que quieras asignarle";
         }
 
         float availW = m_mappingVirtOrigin.x + m_virtualPadView.getLayout().W - m_mappingPhysOrigin.x;
@@ -1271,19 +1356,187 @@ void AppWindow::renderMappingSubtab() {
         }
     }
 
+    // ── H5: selector de tipo + UI específica (solo cuando hay botón seleccionado) ──
+    if (m_mappingSelPhysComp >= 0) {
+        ImGui::Spacing();
+        float availW = m_mappingVirtOrigin.x + m_virtualPadView.getLayout().W - m_mappingPhysOrigin.x;
+        float btnW   = 90.0f;
+        float totalW = btnW * 4 + ImGui::GetStyle().ItemSpacing.x * 3;
+        float offX   = (availW - totalW) * 0.5f;
+        if (offX > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX);
+
+        // Botones de tipo — el activo se muestra resaltado
+        auto typeBtn = [&](const char* label, H5ActionType type) {
+            bool sel = (m_h5ActionType == type);
+            if (sel) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+            if (ImGui::Button(label, { btnW, 0.0f })) {
+                m_h5ActionType = type;
+                m_h5CaptureKeys.clear();
+            }
+            if (sel) ImGui::PopStyleColor();
+        };
+        typeBtn("Xbox##t0",    H5ActionType::Xbox);    ImGui::SameLine();
+        typeBtn("Macro##t1",   H5ActionType::Macro);   ImGui::SameLine();
+        typeBtn("Teclado##t2", H5ActionType::Keyboard); ImGui::SameLine();
+        typeBtn("Ratón##t3",   H5ActionType::Mouse);
+
+        // ── UI por tipo ───────────────────────────────────────────────────────
+        ImGui::Spacing();
+
+        if (m_h5ActionType == H5ActionType::Macro) {
+            // Cargar nombres de macros la primera vez
+            if (!m_h5MacroNamesLoaded) {
+                m_h5MacroNames.clear();
+                try {
+                    std::ifstream f("data/macros.json");
+                    if (f.is_open()) {
+                        json j = json::parse(f);
+                        for (auto& [k, v] : j.items()) m_h5MacroNames.push_back(k);
+                    }
+                } catch (...) {}
+                m_h5MacroNamesLoaded = true;
+            }
+            float comboW = 220.0f;
+            float comboOff = (availW - comboW - ImGui::GetStyle().ItemSpacing.x - 80.0f) * 0.5f;
+            if (comboOff > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + comboOff);
+            ImGui::SetNextItemWidth(comboW);
+            const char* preview = m_h5MacroSel.empty() ? "-- elige macro --" : m_h5MacroSel.c_str();
+            if (ImGui::BeginCombo("##macroPick", preview)) {
+                for (const auto& name : m_h5MacroNames) {
+                    bool selected = (name == m_h5MacroSel);
+                    if (ImGui::Selectable(name.c_str(), selected)) m_h5MacroSel = name;
+                    if (selected) ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Asignar##macroAssign", { 80.0f, 0.0f }) && !m_h5MacroSel.empty()) {
+                const auto& physComps = m_padView.getLayout().components;
+                std::string physShort = stateToShort(physComps[m_mappingSelPhysComp].state);
+                if (!physShort.empty()) {
+                    ButtonAction act;
+                    act.type     = ButtonActionType::Macro;
+                    act.physical = physShort;
+                    act.name     = m_h5MacroSel;
+                    m_h5ActionEdits[physShort] = act;
+                    m_mappingEdits.erase(physShort);
+                }
+                m_mappingSelPhysComp = -1;
+                m_h5ActionType = H5ActionType::Xbox;
+                m_h5MacroSel.clear();
+            }
+
+        } else if (m_h5ActionType == H5ActionType::Keyboard) {
+            // Cancelar con L1+R1 o A+B en el mando
+            bool cancel = (physNow.btnLB && physNow.btnRB) || (physNow.btnA && physNow.btnB);
+            if (cancel) {
+                m_h5ActionType = H5ActionType::Xbox;
+                m_h5CaptureKeys.clear();
+            } else {
+                // Acumular teclas pulsadas (sin repetición, sin duplicados)
+                for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k) {
+                    if (!ImGui::IsKeyPressed((ImGuiKey)k, false)) continue;
+                    auto [name, display] = imguiKeyToKeyName((ImGuiKey)k);
+                    if (name[0] == '\0') continue;
+                    bool dup = false;
+                    for (const auto& p : m_h5CaptureKeys) if (p.first == name) { dup = true; break; }
+                    if (!dup) m_h5CaptureKeys.push_back({ name, display });
+                }
+
+                if (!m_h5CaptureKeys.empty()) {
+                    // Construir string de display: "Ctrl + Z", "Alt + Tab", etc.
+                    std::string displayStr;
+                    for (const auto& p : m_h5CaptureKeys) {
+                        if (!displayStr.empty()) displayStr += " + ";
+                        displayStr += p.second;
+                    }
+
+                    // Combo text en verde + botones Asignar / Borrar en la misma línea
+                    float bAsigW = 100.0f, bBorrarW = 80.0f;
+                    float spacing = ImGui::GetStyle().ItemSpacing.x;
+                    float textW  = ImGui::CalcTextSize(displayStr.c_str()).x;
+                    float totalW = textW + spacing + bAsigW + spacing + bBorrarW;
+                    float offX   = (availW - totalW) * 0.5f;
+                    if (offX > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX);
+
+                    ImGui::TextColored({ 0.3f, 1.0f, 0.3f, 1.0f }, "%s", displayStr.c_str());
+                    ImGui::SameLine();
+                    if (ImGui::Button("Asignar##kbAssign", { bAsigW, 0.0f })) {
+                        const auto& physComps = m_padView.getLayout().components;
+                        std::string physShort = stateToShort(physComps[m_mappingSelPhysComp].state);
+                        if (!physShort.empty()) {
+                            ButtonAction act;
+                            act.type     = ButtonActionType::Keyboard;
+                            act.physical = physShort;
+                            for (const auto& p : m_h5CaptureKeys) act.keys.push_back(p.first);
+                            m_h5ActionEdits[physShort] = act;
+                            m_mappingEdits.erase(physShort);
+                        }
+                        m_mappingSelPhysComp = -1;
+                        m_h5ActionType = H5ActionType::Xbox;
+                        m_h5CaptureKeys.clear();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Borrar##kbClear", { bBorrarW, 0.0f }))
+                        m_h5CaptureKeys.clear();
+                }
+            }
+
+        } else if (m_h5ActionType == H5ActionType::Mouse) {
+            // 5 botones de ratón centrados
+            static const struct { const char* label; const char* name; } kMouseBtns[] = {
+                {"Izq##m0",    "left"},
+                {"Der##m1",    "right"},
+                {"Centro##m2", "middle"},
+                {"Atrás##m3",  "x1"},
+                {"Adelante##m4","x2"},
+            };
+            constexpr int kN = 5;
+            float mBtnW  = 75.0f;
+            float mTotal = mBtnW * kN + ImGui::GetStyle().ItemSpacing.x * (kN - 1);
+            float mOff   = (availW - mTotal) * 0.5f;
+            if (mOff > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + mOff);
+            for (int i = 0; i < kN; ++i) {
+                if (i > 0) ImGui::SameLine();
+                if (ImGui::Button(kMouseBtns[i].label, { mBtnW, 0.0f })) {
+                    const auto& physComps = m_padView.getLayout().components;
+                    std::string physShort = stateToShort(physComps[m_mappingSelPhysComp].state);
+                    if (!physShort.empty()) {
+                        ButtonAction act;
+                        act.type        = ButtonActionType::MouseClick;
+                        act.physical    = physShort;
+                        act.mouseButton = kMouseBtns[i].name;
+                        m_h5ActionEdits[physShort] = act;
+                        m_mappingEdits.erase(physShort);
+                    }
+                    m_mappingSelPhysComp = -1;
+                    m_h5ActionType = H5ActionType::Xbox;
+                }
+            }
+        }
+    }
+
     // ── Gestión de clicks ─────────────────────────────────────────────────────
     if (mouseClicked) {
         int physHit = m_padView.hitTest(mouse, m_mappingPhysOrigin);
         if (physHit >= 0 && m_padView.getLayout().components[physHit].type == "button") {
-            m_mappingSelPhysComp = (physHit == m_mappingSelPhysComp) ? -1 : physHit;
-        } else if (m_mappingSelPhysComp >= 0) {
+            if (physHit == m_mappingSelPhysComp) {
+                m_mappingSelPhysComp = -1;
+                m_h5ActionType = H5ActionType::Xbox;
+                m_h5CaptureKeys.clear(); m_h5MacroSel.clear();
+            } else {
+                m_mappingSelPhysComp = physHit;
+                m_h5ActionType = H5ActionType::Xbox;
+                m_h5CaptureKeys.clear(); m_h5MacroSel.clear();
+            }
+        } else if (m_mappingSelPhysComp >= 0 && m_h5ActionType == H5ActionType::Xbox) {
             int virtHit = m_virtualPadView.hitTest(mouse, m_mappingVirtOrigin);
             if (virtHit >= 0 && m_virtualPadView.getLayout().components[virtHit].type == "button") {
                 const auto& physComps = m_padView.getLayout().components;
                 std::string physShort = stateToShort(physComps[m_mappingSelPhysComp].state);
                 std::string virtShort = stateToShort(m_virtualPadView.getLayout().components[virtHit].state);
                 if (!physShort.empty() && !virtShort.empty()) {
-                    // Si el virtual pulsado ya es el asignado → desasignar; si no → asignar
+                    m_h5ActionEdits.erase(physShort);
                     auto it = m_mappingEdits.find(physShort);
                     bool alreadyAssigned = (it != m_mappingEdits.end() && it->second == virtShort);
                     m_mappingEdits[physShort] = alreadyAssigned ? "" : virtShort;
@@ -1307,6 +1560,8 @@ void AppWindow::renderMappingSubtab() {
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  { 0.25f, 0.25f, 0.25f, 1.0f });
     if (ImGui::Button("Cancelar##mapCancel", { 100.0f, 0.0f })) {
         m_mappingSelPhysComp = -1;
+        m_h5ActionType = H5ActionType::Xbox;
+        m_h5CaptureKeys.clear(); m_h5MacroSel.clear();
         reloadMappingEdits();
     }
     ImGui::PopStyleColor(3);
@@ -1345,22 +1600,45 @@ void AppWindow::saveMappingEdits() {
                     physShort = btn["physical"].get<std::string>();
                 else continue;
 
-                auto it = m_mappingEdits.find(physShort);
-                if (it == m_mappingEdits.end()) continue;
+                json newBtn = btn.is_object() ? btn : json::object();
+                if (!btn.is_object()) newBtn["physical"] = physShort;
+                bool changed = false;
 
-                json newBtn;
-                if (btn.is_object()) {
-                    newBtn = btn;
-                    if (it->second.empty())
-                        newBtn.erase("virtual");
-                    else
-                        newBtn["virtual"] = it->second;
+                // H5 action overrides Xbox remap
+                auto h5it = m_h5ActionEdits.find(physShort);
+                if (h5it != m_h5ActionEdits.end()) {
+                    const ButtonAction& act = h5it->second;
+                    newBtn.erase("virtual");
+                    if (act.type == ButtonActionType::Keyboard) {
+                        newBtn["type"] = "keyboard";
+                        newBtn.erase("name");
+                        json keysArr = json::array();
+                        for (const auto& k : act.keys) keysArr.push_back(k);
+                        newBtn["keys"] = keysArr;
+                    } else if (act.type == ButtonActionType::MouseClick) {
+                        newBtn["type"]   = "mouse_click";
+                        newBtn["button"] = act.mouseButton;
+                        newBtn.erase("name"); newBtn.erase("keys");
+                    } else if (act.type == ButtonActionType::Macro) {
+                        newBtn["type"] = "macro";
+                        newBtn["name"] = act.name;
+                        newBtn.erase("keys"); newBtn.erase("button");
+                    }
+                    changed = true;
                 } else {
-                    newBtn["physical"] = physShort;
-                    if (!it->second.empty())
-                        newBtn["virtual"] = it->second;
+                    auto it = m_mappingEdits.find(physShort);
+                    if (it != m_mappingEdits.end()) {
+                        // Limpiar campos H5 si los hubiera de antes
+                        newBtn.erase("type"); newBtn.erase("keys");
+                        newBtn.erase("button"); newBtn.erase("name");
+                        if (it->second.empty())
+                            newBtn.erase("virtual");
+                        else
+                            newBtn["virtual"] = it->second;
+                        changed = true;
+                    }
                 }
-                changes.push_back({ key, std::move(newBtn) });
+                if (changed) changes.push_back({ key, std::move(newBtn) });
             }
             for (auto& [key, val] : changes)
                 ctrl["buttons"][key] = val;

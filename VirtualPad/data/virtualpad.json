@@ -1,5 +1,6 @@
 {
     "virtual_vid": "5650",
     "virtual_pid": "0001",
-    "log_level": "debug"
+    "log_level": "debug",
+    "accepted_xbox_buttons": ["a","b","x","y","l1","r1","select","start","home","l3","r3"]
 }

@@ -174,6 +174,11 @@ VirtualPadConfig loadVirtualPadConfig(const std::string& path) {
         cfg.pid = static_cast<uint16_t>(std::stoul(root["virtual_pid"].get<std::string>(), nullptr, 16));
     if (root.contains("log_level"))
         cfg.logLevel = root["log_level"].get<std::string>();
+    if (root.contains("accepted_xbox_buttons") && root["accepted_xbox_buttons"].is_array()) {
+        cfg.acceptedXboxButtons.clear();
+        for (const auto& b : root["accepted_xbox_buttons"])
+            cfg.acceptedXboxButtons.push_back(b.get<std::string>());
+    }
     return cfg;
 }
 

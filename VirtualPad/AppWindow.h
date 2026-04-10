@@ -72,6 +72,9 @@ private:
     // --- Controller configs (for friendly name lookup in the scanner) ---
     std::vector<ControllerConfig> m_controllerConfigs;
 
+    // --- VirtualPad config (loaded once at startup) ---
+    std::vector<std::string> m_acceptedXboxButtons;
+
     // --- Game profiles ---
     std::vector<std::string> m_profilePaths;   // full paths to discovered profile JSONs
     std::vector<std::string> m_profileNames;   // profile_name from each JSON
@@ -110,7 +113,15 @@ private:
     uint16_t m_mappingActivePid    = 0;   // PID del mando activo al cargar edits
     int      m_mappingFlashComp    = -1;  // componente virtual en flash de confirmación (-1 = ninguno)
     float    m_mappingFlashTimer   = 0.0f; // segundos restantes del flash
-    std::unordered_map<std::string, std::string> m_mappingEdits;  // physShort → virtShort
+    std::unordered_map<std::string, std::string>    m_mappingEdits;     // physShort → virtShort (Xbox)
+    std::unordered_map<std::string, ButtonAction>   m_h5ActionEdits;    // physShort → acción H5
+    // H5 — action type selector
+    enum class H5ActionType { Xbox, Macro, Keyboard, Mouse };
+    H5ActionType             m_h5ActionType         = H5ActionType::Xbox;
+    std::vector<std::pair<std::string,std::string>> m_h5CaptureKeys; // {json_name, display}
+    std::string              m_h5MacroSel;           // macro seleccionada en el combo
+    std::vector<std::string> m_h5MacroNames;         // nombres cargados de macros.json
+    bool                     m_h5MacroNamesLoaded = false;
     // H9 — hardware mapping (hold to select, press to assign)
     int          m_h9HoldComp    = -1;   // component being held for selection (-1 = none)
     float        m_h9HoldTimer   = 0.0f; // seconds held so far

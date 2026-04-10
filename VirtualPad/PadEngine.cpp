@@ -131,6 +131,8 @@ static void sendMouseButton(const std::string& btn, bool press) {
     if      (btn == "left")   inp.mi.dwFlags = press ? MOUSEEVENTF_LEFTDOWN   : MOUSEEVENTF_LEFTUP;
     else if (btn == "right")  inp.mi.dwFlags = press ? MOUSEEVENTF_RIGHTDOWN  : MOUSEEVENTF_RIGHTUP;
     else if (btn == "middle") inp.mi.dwFlags = press ? MOUSEEVENTF_MIDDLEDOWN : MOUSEEVENTF_MIDDLEUP;
+    else if (btn == "x1") { inp.mi.dwFlags = press ? MOUSEEVENTF_XDOWN : MOUSEEVENTF_XUP; inp.mi.mouseData = XBUTTON1; }
+    else if (btn == "x2") { inp.mi.dwFlags = press ? MOUSEEVENTF_XDOWN : MOUSEEVENTF_XUP; inp.mi.mouseData = XBUTTON2; }
     else return;
     SendInput(1, &inp, sizeof(INPUT));
 }
@@ -682,6 +684,7 @@ void PadEngine::threadFunc() {
                     } catch (...) {}
                 }
                 input->setConfig(*cfg);  // push updated button map to active input source
+                initMacros();            // re-init KB/mouse edge state + re-parse macros
             }
         }
 
