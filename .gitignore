@@ -8,6 +8,9 @@ VirtualPad/consoleOutput/
 VirtualPad/images/founts/
 *.png~
 
+# Claude Code memory (lives outside repo, but just in case)
+memory/
+
 # Private working documents
 BITACORA.md
 IDEAS.md

@@ -102,6 +102,30 @@ static WORD keyNameToVK(const std::string& name) {
     return 0;
 }
 
+// Set a virtual button in GamepadState by short name (a/b/x/y/l1/r1/… and dpad up/down/left/right).
+static void applyVirtualBtnByName(GamepadState& state, const std::string& name, bool pressed) {
+    if (!pressed) return;
+    if      (name == "a")      state.btnA     = true;
+    else if (name == "b")      state.btnB     = true;
+    else if (name == "x")      state.btnX     = true;
+    else if (name == "y")      state.btnY     = true;
+    else if (name == "l1")     state.btnLB    = true;
+    else if (name == "r1")     state.btnRB    = true;
+    else if (name == "select") state.btnBack  = true;
+    else if (name == "start")  state.btnStart = true;
+    else if (name == "home")   state.btnHome  = true;
+    else if (name == "l3")     state.btnL3    = true;
+    else if (name == "r3")     state.btnR3    = true;
+    else if (name == "l4")     state.btnL4    = true;
+    else if (name == "r4")     state.btnR4    = true;
+    else if (name == "lp")     state.btnLP    = true;
+    else if (name == "rp")     state.btnRP    = true;
+    else if (name == "up"    || name == "dpad_up")    state.dpadUp   = true;
+    else if (name == "down"  || name == "dpad_down")  state.dpadDown = true;
+    else if (name == "left"  || name == "dpad_left")  state.dpadLeft = true;
+    else if (name == "right" || name == "dpad_right") state.dpadRight = true;
+}
+
 // press=true  → press all keys in order
 // press=false → release all keys in reverse order
 static void sendKeyCombo(const std::vector<std::string>& keys, bool press) {
@@ -602,6 +626,26 @@ void PadEngine::threadFunc() {
         std::unordered_map<std::string, bool>        dpadKbPrev;
         std::unordered_map<std::string, bool>        dpadMousePrev;
 
+        // Trigger-as-source state
+        float trigLPrev = 0.0f;           // previous frame physical trigger L value
+        float trigRPrev = 0.0f;           // previous frame physical trigger R value
+        Macro trigLMacro;                 // macro for simple triggerLAction
+        Macro trigRMacro;                 // macro for simple triggerRAction
+        bool  trigLMacroOk  = false;      // true = trigLMacro parsed and valid
+        bool  trigRMacroOk  = false;
+        bool  trigLKbPrev   = false;      // previous active state for keyboard trigger L
+        bool  trigRKbPrev   = false;
+        bool  trigLMousPrev = false;      // previous active state for mouse trigger L
+        bool  trigRMousPrev = false;
+        // Ranged trigger state (indexed by range position in triggerLRanges/triggerRRanges)
+        // uint8_t instead of bool to avoid std::vector<bool> proxy reference issues
+        std::vector<uint8_t> trigLRangePrev;
+        std::vector<uint8_t> trigRRangePrev;
+        std::vector<Macro>   trigLRangeMacros;
+        std::vector<Macro>   trigRRangeMacros;
+        std::vector<uint8_t> trigLRangeMacroOk;
+        std::vector<uint8_t> trigRRangeMacroOk;
+
         auto initMacros = [&]() {
             macros.clear();      macroPrevBtn.clear(); macroNames.clear();
             macroRotCount.clear(); macroLastRX.clear(); macroLastRY.clear();
@@ -695,6 +739,55 @@ void PadEngine::threadFunc() {
                     spdlog::error("Error parsing macro '{}': {}", action.target, ex.what());
                 }
             }
+
+            // Trigger-as-source state reset
+            trigLPrev = trigRPrev = 0.0f;
+            trigLKbPrev = trigRKbPrev = trigLMousPrev = trigRMousPrev = false;
+            trigLMacroOk = trigRMacroOk = false;
+            // Simple trigger macros
+            auto initTrigMacro = [&](const ButtonAction& act, Macro& mac, bool& ok) {
+                ok = false;
+                if (act.type != ButtonActionType::Macro) return;
+                auto it = macroLibrary.find(act.name);
+                if (it == macroLibrary.end()) {
+                    spdlog::warn("Macro '{}' (trigger) not found in library.", act.name);
+                    return;
+                }
+                try {
+                    MacroParser::parse(it->second, mac);
+                    ok = true;
+                    spdlog::info("Macro '{}' assigned to trigger.", act.name);
+                } catch (const std::exception& ex) {
+                    spdlog::error("Error parsing trigger macro '{}': {}", act.name, ex.what());
+                }
+            };
+            if (cfg->triggerLHasAction) initTrigMacro(cfg->triggerLAction, trigLMacro, trigLMacroOk);
+            if (cfg->triggerRHasAction) initTrigMacro(cfg->triggerRAction, trigRMacro, trigRMacroOk);
+            // Ranged trigger macros
+            auto initRangeMacros = [&](const std::vector<TriggerRange>& ranges,
+                                       std::vector<Macro>& macs, std::vector<uint8_t>& ok,
+                                       std::vector<uint8_t>& prev) {
+                macs.clear(); ok.clear(); prev.clear();
+                for (const auto& r : ranges) {
+                    prev.push_back(0);
+                    if (r.action.type == ButtonActionType::Macro) {
+                        auto it = macroLibrary.find(r.action.name);
+                        if (it != macroLibrary.end()) {
+                            Macro m;
+                            try {
+                                MacroParser::parse(it->second, m);
+                                macs.push_back(std::move(m));
+                                ok.push_back(1);
+                                continue;
+                            } catch (...) {}
+                        }
+                    }
+                    macs.push_back({});
+                    ok.push_back(0);
+                }
+            };
+            initRangeMacros(cfg->triggerLRanges, trigLRangeMacros, trigLRangeMacroOk, trigLRangePrev);
+            initRangeMacros(cfg->triggerRRanges, trigRRangeMacros, trigRRangeMacroOk, trigRRangePrev);
         };
         initMacros();
 
@@ -982,6 +1075,177 @@ void PadEngine::threadFunc() {
                 if (dir == "left")  state.dpadLeft  = false;
                 if (dir == "right") state.dpadRight = false;
             }
+            // Dpad direction → virtual trigger (L2/R2)
+            for (const auto& [dir, action] : cfg->dpadActions) {
+                if (action.type != ButtonActionType::Trigger) continue;
+                bool active = dpadActive(dir);
+                if (active) {
+                    if      (action.target == "l2") state.triggerL = 1.0f;
+                    else if (action.target == "r2") state.triggerR = 1.0f;
+                }
+                // Don't forward to virtual pad
+                if (dir == "up")    state.dpadUp    = false;
+                if (dir == "down")  state.dpadDown  = false;
+                if (dir == "left")  state.dpadLeft  = false;
+                if (dir == "right") state.dpadRight = false;
+            }
+
+            // --- Trigger-as-source actions ---
+            constexpr float kTrigActThresh = 0.1f;  // activation threshold for digital targets
+            // Helper: apply a single ButtonAction driven by a float trigger value.
+            // physVal is the raw physical trigger value [0..1].
+            // prevActive is the per-action edge-detect flag (modified in place).
+            // After the call, the source trigger value in state has been routed/cleared.
+            auto applyTrigAct = [&](float physVal, const ButtonAction& act,
+                                     bool& kbPrev, bool& mousPrev, Macro& mac, bool macOk,
+                                     float& srcTrig) {
+                bool active = (physVal > kTrigActThresh);
+                switch (act.type) {
+                case ButtonActionType::TriggerPassthrough: {
+                    // Cross-passthrough only: only consume source when routing to the OTHER trigger.
+                    // Same-trigger (R2→R2 or L2→L2) = identity, leave srcTrig untouched.
+                    bool srcIsR2 = (&srcTrig == &state.triggerR);
+                    if (act.target == "r2" && !srcIsR2) {
+                        state.triggerR = (physVal > state.triggerR ? physVal : state.triggerR);
+                        srcTrig = 0.0f;  // consume L2
+                    } else if (act.target == "l2" && srcIsR2) {
+                        state.triggerL = (physVal > state.triggerL ? physVal : state.triggerL);
+                        srcTrig = 0.0f;  // consume R2
+                    }
+                    // same-trigger: no-op, value passes through unchanged
+                    break;
+                }
+                case ButtonActionType::VirtualButton:
+                    applyVirtualBtnByName(state, act.name, active);
+                    srcTrig = 0.0f;
+                    break;
+                case ButtonActionType::Keyboard:
+                    if (active != kbPrev) {
+                        sendKeyCombo(act.keys, active);
+                        if (active) {
+                            std::string combo;
+                            for (const auto& k : act.keys) { if (!combo.empty()) combo += '+'; combo += k; }
+                            pushEvent({ PadEventType::KeyboardAction, combo, true });
+                        }
+                        kbPrev = active;
+                    }
+                    srcTrig = 0.0f;
+                    break;
+                case ButtonActionType::MouseClick:
+                    if (active != mousPrev) {
+                        sendMouseButton(act.mouseButton, active);
+                        if (active) pushEvent({ PadEventType::MouseAction, act.mouseButton + " click", true });
+                        mousPrev = active;
+                    }
+                    srcTrig = 0.0f;
+                    break;
+                case ButtonActionType::Macro:
+                    if (active && !kbPrev) {  // reuse kbPrev as macroPrev for trigger
+                        if (macOk) {
+                            if (mac.getMode() == MacroRepeatMode::UntilRelease) mac.start();
+                            else mac.toggle();
+                            if (mac.isActive()) pushEvent({ PadEventType::MacroToggle, act.name, true });
+                        }
+                        kbPrev = true;
+                    } else if (!active && kbPrev) {
+                        if (macOk && mac.getMode() == MacroRepeatMode::UntilRelease) mac.stop();
+                        kbPrev = false;
+                    }
+                    if (macOk && mac.isActive()) mac.tick(state);
+                    srcTrig = 0.0f;
+                    break;
+                default: break;
+                }
+            };
+
+            // Simple trigger actions.
+            // Track cross-passthrough: if L2 was routed to R2 (or R2 to L2), skip the
+            // destination's own trigger_actions so the analog value reaches ViGEm unmodified.
+            bool trigLWasCrossTarget = false;
+            bool trigRWasCrossTarget = false;
+
+            if (cfg->triggerLHasAction && cfg->triggerLRanges.empty()) {
+                float physL = state.triggerL;
+                applyTrigAct(physL, cfg->triggerLAction,
+                             trigLKbPrev, trigLMousPrev, trigLMacro, trigLMacroOk,
+                             state.triggerL);
+                // If L2→R2 passthrough fired, mark R2 as cross-target
+                if (cfg->triggerLAction.type == ButtonActionType::TriggerPassthrough &&
+                    cfg->triggerLAction.target == "r2" && physL > 0.0f)
+                    trigRWasCrossTarget = true;
+            }
+            if (cfg->triggerRHasAction && cfg->triggerRRanges.empty()) {
+                float physR = state.triggerR;
+                applyTrigAct(physR, cfg->triggerRAction,
+                             trigRKbPrev, trigRMousPrev, trigRMacro, trigRMacroOk,
+                             state.triggerR);
+                // If R2→L2 passthrough fired, mark L2 as cross-target
+                if (cfg->triggerRAction.type == ButtonActionType::TriggerPassthrough &&
+                    cfg->triggerRAction.target == "l2" && physR > 0.0f)
+                    trigLWasCrossTarget = true;
+            }
+
+            // Ranged trigger actions (overrides simple when non-empty).
+            // Skipped for triggers that received a cross-passthrough value.
+            auto applyTrigRanges = [&](float physVal,
+                                        const std::vector<TriggerRange>& ranges,
+                                        std::vector<uint8_t>& rangePrev,
+                                        std::vector<Macro>& rangeMacs,
+                                        std::vector<uint8_t>& rangeMacOk,
+                                        float& srcTrig) {
+                if (ranges.empty()) return;
+                srcTrig = 0.0f;  // trigger no longer outputs analog value
+                for (size_t i = 0; i < ranges.size(); ++i) {
+                    const TriggerRange& r = ranges[i];
+                    bool active = (physVal >= r.from && physVal <= r.to);
+                    uint8_t& prev = rangePrev[i];
+                    if (!r.hasAction) { prev = active; continue; }
+                    const ButtonAction& act = r.action;
+                    switch (act.type) {
+                    case ButtonActionType::VirtualButton:
+                        applyVirtualBtnByName(state, act.name, active);
+                        break;
+                    case ButtonActionType::Keyboard:
+                        if (active != prev) {
+                            sendKeyCombo(act.keys, active);
+                            if (active) {
+                                std::string combo;
+                                for (const auto& k : act.keys) { if (!combo.empty()) combo += '+'; combo += k; }
+                                pushEvent({ PadEventType::KeyboardAction, combo, true });
+                            }
+                        }
+                        break;
+                    case ButtonActionType::MouseClick:
+                        if (active != prev) {
+                            sendMouseButton(act.mouseButton, active);
+                            if (active) pushEvent({ PadEventType::MouseAction, act.mouseButton + " click", true });
+                        }
+                        break;
+                    case ButtonActionType::Macro:
+                        if (active && !prev && i < rangeMacs.size() && rangeMacOk[i]) {
+                            if (rangeMacs[i].getMode() == MacroRepeatMode::UntilRelease) rangeMacs[i].start();
+                            else rangeMacs[i].toggle();
+                            if (rangeMacs[i].isActive()) pushEvent({ PadEventType::MacroToggle, act.name, true });
+                        } else if (!active && prev && i < rangeMacs.size() && rangeMacOk[i]) {
+                            if (rangeMacs[i].getMode() == MacroRepeatMode::UntilRelease) rangeMacs[i].stop();
+                        }
+                        if (i < rangeMacs.size() && rangeMacOk[i] && rangeMacs[i].isActive())
+                            rangeMacs[i].tick(state);
+                        break;
+                    default: break;
+                    }
+                    prev = active;
+                }
+            };
+            if (!trigLWasCrossTarget)
+                applyTrigRanges(state.triggerL, cfg->triggerLRanges,
+                                trigLRangePrev, trigLRangeMacros, trigLRangeMacroOk, state.triggerL);
+            if (!trigRWasCrossTarget)
+                applyTrigRanges(state.triggerR, cfg->triggerRRanges,
+                                trigRRangePrev, trigRRangeMacros, trigRRangeMacroOk, state.triggerR);
+
+            trigLPrev = state.triggerL;
+            trigRPrev = state.triggerR;
 
             // --- Mouse movement (continuous, sub-pixel accumulator) ---
             constexpr float kMouseDeadZone = 0.12f;

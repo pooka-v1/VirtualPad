@@ -90,6 +90,16 @@
       "mode": "hid",
       "pid": "6009",
       "source_name": "8BitDo Pro 3 (D-mode)",
+      "trigger_actions": {
+        "l2": {
+          "target": "l2",
+          "type": "trigger_passthrough"
+        },
+        "r2": {
+          "target": "r2",
+          "type": "trigger_passthrough"
+        }
+      },
       "vid": "2DC8"
     },
     {
@@ -206,7 +216,7 @@
       "buttons": {
         "1": {
           "physical": "a",
-          "virtual": "a"
+          "virtual": "b"
         },
         "11": {
           "physical": "select",
@@ -242,11 +252,11 @@
         },
         "4": {
           "physical": "x",
-          "virtual": "r3"
+          "virtual": "y"
         },
         "5": {
           "physical": "y",
-          "virtual": "dpad_right"
+          "virtual": "x"
         },
         "6": {
           "keys": [
@@ -267,28 +277,21 @@
       },
       "dpad": "hid_hat",
       "dpad_remap": {
-        "down": {
-          "keys": [
-            "k"
-          ],
-          "physical": "dpad_down",
-          "type": "keyboard"
-        },
-        "left": {
-          "button": "right",
-          "physical": "dpad_left",
-          "type": "mouse_click"
-        },
-        "right": {
-          "name": "LuluOverdrive",
-          "physical": "dpad_right",
-          "type": "macro"
-        }
+        "down": "dpad_down",
+        "left": "dpad_left",
+        "right": "dpad_right",
+        "up": "dpad_up"
       },
       "layout_id": "pro2_ps",
       "mode": "hid",
       "pid": "6006",
       "source_name": "8BitDo Pro 2 (D-mode)",
+      "trigger_actions": {
+        "l2": {
+          "target": "l2",
+          "type": "trigger_passthrough"
+        }
+      },
       "vid": "2DC8"
     },
     {

@@ -389,6 +389,11 @@ void HIDInputSource::applyButtons(PCHAR buf, ULONG bufLen, GamepadState& state) 
         if (action.physical.empty()) continue;
         bool pressed = (m_lastButtonMask & (1u << (bit - 1))) != 0;
         setPhys(action.physical, pressed);
+        // Track physical L2/R2 trigger buttons (not remapped buttons acting as triggers)
+        if (pressed && action.type == ButtonActionType::Trigger) {
+            if (action.physical == "l2") physDisplay.triggerL = 1.0f;
+            else if (action.physical == "r2") physDisplay.triggerR = 1.0f;
+        }
     }
     m_physicalState = physDisplay;
 
@@ -400,6 +405,8 @@ void HIDInputSource::applyButtons(PCHAR buf, ULONG bufLen, GamepadState& state) 
     state.btnL3 = state.btnR3 = false;
     state.btnL4 = state.btnR4 = false;
     state.btnLP = state.btnRP = state.btnTouch = false;
+    // Triggers also reset each frame so button-mapped triggers clear when released
+    state.triggerL = state.triggerR = 0.0f;
 
     // Virtual remapping: use action.name so ViGEm receives the mapped output.
     for (const auto& [bit, action] : m_config.buttons) {
@@ -502,11 +509,14 @@ void HIDInputSource::applyAxes(PCHAR buf, ULONG bufLen, GamepadState& state) {
         else if (mapping.target == "left_y")          state.leftY   = v;
         else if (mapping.target == "right_x")         state.rightX  = v;
         else if (mapping.target == "right_y")         state.rightY  = v;
-        else if (mapping.target == "trigger_l")       state.triggerL = (v + 1.0f) * 0.5f;
-        else if (mapping.target == "trigger_r")       state.triggerR = (v + 1.0f) * 0.5f;
+        else if (mapping.target == "trigger_l")       { float tv = (v + 1.0f) * 0.5f; m_physicalState.triggerL = tv; if (tv > state.triggerL) state.triggerL = tv; }
+        else if (mapping.target == "trigger_r")       { float tv = (v + 1.0f) * 0.5f; m_physicalState.triggerR = tv; if (tv > state.triggerR) state.triggerR = tv; }
         else if (mapping.target == "trigger_combined") {
-            state.triggerL = (v > 0.0f) ?  v : 0.0f;
-            state.triggerR = (v < 0.0f) ? -v : 0.0f;
+            float tl = (v > 0.0f) ?  v : 0.0f;
+            float tr = (v < 0.0f) ? -v : 0.0f;
+            m_physicalState.triggerL = tl; m_physicalState.triggerR = tr;
+            if (tl > state.triggerL) state.triggerL = tl;
+            if (tr > state.triggerR) state.triggerR = tr;
         }
         else if (mapping.target == "mouse_x") state.mouseX = v;
         else if (mapping.target == "mouse_y") state.mouseY = v;

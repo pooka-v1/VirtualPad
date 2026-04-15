@@ -42,6 +42,9 @@ static ButtonAction parseButtonAction(const json& val) {
             action.type   = ButtonActionType::Trigger;
             action.target = val.at("target").get<std::string>();
             if (val.contains("axis")) action.axis = val["axis"].get<std::string>();
+        } else if (type == "trigger_passthrough") {
+            action.type   = ButtonActionType::TriggerPassthrough;
+            action.target = val.at("target").get<std::string>();
         } else if (type == "keyboard") {
             action.type = ButtonActionType::Keyboard;
             if (val.contains("keys"))
@@ -154,6 +157,33 @@ std::vector<ControllerConfig> loadControllerConfigs(const std::string& path) {
                 else if (btn.is_object())
                     cfg.dpadActions[dir] = parseButtonAction(btn);
             }
+
+        if (c.contains("trigger_actions") && c["trigger_actions"].is_object()) {
+            const auto& ta = c["trigger_actions"];
+            auto parseTrigSide = [&](const char* key,
+                                     ButtonAction& simpleAct, bool& hasSimple,
+                                     std::vector<TriggerRange>& ranges) {
+                if (!ta.contains(key)) return;
+                const auto& t = ta[key];
+                if (t.is_object() && t.contains("ranges") && t["ranges"].is_array()) {
+                    for (const auto& r : t["ranges"]) {
+                        TriggerRange tr;
+                        tr.from   = r.value("from", 0.0f);
+                        tr.to     = r.value("to",   1.0f);
+                        if (r.contains("action")) {
+                            tr.action    = parseButtonAction(r["action"]);
+                            tr.hasAction = true;
+                        }
+                        ranges.push_back(tr);
+                    }
+                } else {
+                    simpleAct  = parseButtonAction(t);
+                    hasSimple  = true;
+                }
+            };
+            parseTrigSide("l2", cfg.triggerLAction, cfg.triggerLHasAction, cfg.triggerLRanges);
+            parseTrigSide("r2", cfg.triggerRAction, cfg.triggerRHasAction, cfg.triggerRRanges);
+        }
 
         if (c.contains("touchpad")) {
             const auto& tp        = c["touchpad"];

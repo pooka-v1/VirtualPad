@@ -107,7 +107,9 @@ private:
     bool         m_layoutEditorInitialized = false;
     bool         m_layoutsFromBackup       = false;  // true when .bak was the fallback
 
-    // --- Mapping editor (subtab [Mapear] en Pads) ---
+    // --- Mapping editor (modo mapping en Pads) ---
+    bool     m_mappingActive       = false; // true = modo mapping activo
+
     int      m_mappingSelPhysComp  = -1;  // componente físico seleccionado (-1 = ninguno)
     ImVec2   m_mappingPhysOrigin   = {};  // canvas origin del pad físico (capturado cada frame)
     ImVec2   m_mappingVirtOrigin   = {};  // canvas origin del pad virtual
@@ -142,6 +144,25 @@ private:
     std::string  m_selStickDir;          // selected direction for axis mapping: "up","down","left","right",""
     bool         m_selStickAsButton = false;  // true → stick selected for L3/R3 button assignment
     std::string  m_selDpadDir;           // selected dpad direction: "up","down","left","right",""
+    // H7 — trigger as source mapping
+    std::string  m_selTriggerSrc;        // "l2", "r2", or "" — selected physical trigger as source
+    std::unordered_map<std::string, ButtonAction> m_trigActionEdits;  // "l2"/"r2" → simple action
+    std::string  m_h9HoldTriggerSrc;     // "l2" or "r2" being held pre-selection, or ""
+    float        m_h9HoldTriggerTimer = 0.0f;
+    // H7 — rangos (trigger zones)
+    struct RangeEdit { float from = 0.0f; float to = 1.0f; ButtonAction action; bool hasAction = false; };
+    std::vector<RangeEdit> m_trigLRangeEdits;   // pending range edits for L2 (overrides simple)
+    std::vector<RangeEdit> m_trigRRangeEdits;   // pending range edits for R2 (overrides simple)
+    // Rangos modal state
+    bool         m_rangosModalOpen  = false;
+    std::string  m_rangosForTrigger;             // "l2" or "r2"
+    std::vector<RangeEdit> m_rangosWork;         // working copy while modal is open
+    int          m_rangosSelSect    = -1;        // selected section index (-1 = none)
+    H5ActionType m_rangosActType    = H5ActionType::Xbox;
+    std::vector<std::pair<std::string,std::string>> m_rangosCaptureKeys;
+    std::string  m_rangosMacroSel;
+    int          m_rangosXboxSel    = -1;        // index into kXboxChoices combo
+    void renderRangosModal();
     void saveMappingEdits();
     void reloadMappingEdits();
 };

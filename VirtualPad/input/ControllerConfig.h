@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <cstdint>
 
-enum class ButtonActionType  { VirtualButton, Trigger, Bot, Macro, Keyboard, MouseClick };
+enum class ButtonActionType  { VirtualButton, Trigger, TriggerPassthrough, Bot, Macro, Keyboard, MouseClick };
 enum class HalfAxisActionType { Analog, VirtualButton, Dpad, Macro, Keyboard, Mouse };
 
 struct ButtonAction {
@@ -62,6 +62,14 @@ struct ImuConfig {
     float gyroScale   = 1.0f / 32768.0f;  // int16 raw → normalized [-1..1]
 };
 
+// One action bound to a specific range of a physical trigger's value.
+struct TriggerRange {
+    float        from      = 0.0f;  // inclusive lower bound [0, 1]
+    float        to        = 1.0f;  // inclusive upper bound [0, 1]
+    ButtonAction action;
+    bool         hasAction = false; // true only if an action was explicitly set
+};
+
 struct ControllerConfig {
     uint16_t    vid = 0;
     uint16_t    pid = 0;
@@ -78,4 +86,13 @@ struct ControllerConfig {
     std::string    layout_id;  // references an entry in data/pad_layouts.json; empty = use defaults
     TouchpadConfig touchpad;
     ImuConfig      imu;
+
+    // Physical trigger → action mapping (physical trigger as source)
+    ButtonAction   triggerLAction;
+    ButtonAction   triggerRAction;
+    bool           triggerLHasAction = false;
+    bool           triggerRHasAction = false;
+    // Physical trigger → ranged actions (if non-empty, overrides the simple action above)
+    std::vector<TriggerRange> triggerLRanges;
+    std::vector<TriggerRange> triggerRRanges;
 };
