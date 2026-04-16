@@ -8,6 +8,7 @@
 #include "PadView.h"
 #include "MappingModel.h"
 #include "MappingSelection.h"
+#include "TriggerRangeModal.h"
 
 // ---------------------------------------------------------------------------
 // MappingEditor — self-contained mapping editor widget.
@@ -74,17 +75,18 @@ private:
     ImVec2 m_physOrigin = {};
     ImVec2 m_virtOrigin = {};
 
-    // Rangos modal state (to be moved to RangosModal in S5)
-    bool         m_rangosModalOpen  = false;
-    std::string  m_rangosForTrigger;
-    std::vector<RangeEdit> m_rangosWork;
-    int          m_rangosSelSect    = -1;
-    H5ActionType m_rangosActType    = H5ActionType::Xbox;
-    std::vector<std::pair<std::string,std::string>> m_rangosCaptureKeys;
-    std::string  m_rangosMacroSel;
-    int          m_rangosXboxSel    = -1;
+    TriggerRangeModal m_trigRangeModal;
 
     void reload();
     void save();
-    void renderRangosModal();
+
+    // Click handling — chained dispatch
+    void handleClick(PadView& phys, PadView& virt, ImVec2 mouse);
+    void onArrowHit(int arrowComp, const std::string& dir);
+    void onPhysButtonHit(PadView& phys, int physHit);
+    void onPhysStickHit(int physHit);
+    void onPhysDpadHit(PadView& phys, int physHit, ImVec2 mouse);
+    void onVirtHitPhysButton(PadView& phys, PadView& virt, ImVec2 mouse);
+    void onVirtHitPhysStick(PadView& phys, PadView& virt, ImVec2 mouse);
+    void onVirtHitTriggerSrc(PadView& virt, ImVec2 mouse);
 };
