@@ -1,4 +1,5 @@
 #include "EightBitDoInputSource.h"
+#include "StickSlotsHelper.h"
 #include <algorithm>
 
 #pragma comment(lib, "WinMM.lib")
@@ -54,8 +55,20 @@ bool EightBitDoInputSource::read(GamepadState& state) {
     state.btnL4 = state.btnR4 = false;
     state.btnLP = state.btnRP = false;
 
+    // Buttons whose physical identity is a stick slot source lose their virtual
+    // action entirely (one input → one output). Identified by action.physical so
+    // unrelated buttons remapped to the same virtual target are not suppressed.
+    auto isSlotSrc = [&](const std::string& phys) -> bool {
+        if (phys.empty() || m_config.stickSlots.empty()) return false;
+        for (const auto& [slot, srcs] : m_config.stickSlots)
+            for (const auto& src : srcs)
+                if (src == phys) return true;
+        return false;
+    };
+
     // Process all mapped buttons.
     for (const auto& [bit, action] : m_config.buttons) {
+        if (isSlotSrc(action.physical)) continue;
         bool pressed = (info.dwButtons & (1u << (bit - 1))) != 0;
         switch (action.type) {
         case ButtonActionType::VirtualButton:
@@ -208,12 +221,51 @@ bool EightBitDoInputSource::read(GamepadState& state) {
     // virtual output and isn't overwritten by physical dpad processing.
     for (const auto& [bit, action] : m_config.buttons) {
         if (action.type != ButtonActionType::VirtualButton) continue;
+        if (isSlotSrc(action.physical)) continue;
         bool pressed = (info.dwButtons & (1u << (bit - 1))) != 0;
         if (!pressed) continue;
         if      (action.name == "dpad_up")    state.dpadUp    = true;
         else if (action.name == "dpad_down")  state.dpadDown  = true;
         else if (action.name == "dpad_left")  state.dpadLeft  = true;
         else if (action.name == "dpad_right") state.dpadRight = true;
+    }
+
+    // Stick slots: build physical state snapshot then apply overrides.
+    if (!m_config.stickSlots.empty()) {
+        GamepadState phys;
+        // Physical buttons: iterate config and check raw bit mask directly.
+        for (const auto& [bit, action] : m_config.buttons) {
+            if (action.physical.empty()) continue;
+            if (!(info.dwButtons & (1u << (bit - 1)))) continue;
+            const std::string& p = action.physical;
+            if      (p == "a")      phys.btnA     = true;
+            else if (p == "b")      phys.btnB     = true;
+            else if (p == "x")      phys.btnX     = true;
+            else if (p == "y")      phys.btnY     = true;
+            else if (p == "l1")     phys.btnLB    = true;
+            else if (p == "r1")     phys.btnRB    = true;
+            else if (p == "select") phys.btnBack  = true;
+            else if (p == "start")  phys.btnStart = true;
+            else if (p == "home")   phys.btnHome  = true;
+            else if (p == "l3")     phys.btnL3    = true;
+            else if (p == "r3")     phys.btnR3    = true;
+            else if (p == "l4")     phys.btnL4    = true;
+            else if (p == "r4")     phys.btnR4    = true;
+            else if (p == "lp")     phys.btnLP    = true;
+            else if (p == "rp")     phys.btnRP    = true;
+        }
+        // Triggers: post-cancellation value from state is the physical value.
+        phys.triggerL = state.triggerL;
+        phys.triggerR = state.triggerR;
+        // Dpad: physical directions (before button→dpad remapping above).
+        // Use POV/axis-driven dpad from state; button→dpad remapping only ORs in,
+        // so state.dpadUp etc. already reflects physical dpad at this point.
+        phys.dpadUp    = state.dpadUp;
+        phys.dpadDown  = state.dpadDown;
+        phys.dpadLeft  = state.dpadLeft;
+        phys.dpadRight = state.dpadRight;
+
+        applyStickSlots(m_config, phys, state);
     }
 
     return true;

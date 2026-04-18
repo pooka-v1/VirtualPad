@@ -40,10 +40,14 @@ bool TriggerRangeModal::render() {
         {"A","a"},{"B","b"},{"X","x"},{"Y","y"},
         {"L1","l1"},{"R1","r1"},{"Select","select"},{"Start","start"},{"Home","home"},
         {"L3","l3"},{"R3","r3"},
-        {"Cruceta Arriba","up"},{"Cruceta Abajo","down"},
-        {"Cruceta Izq","left"},{"Cruceta Der","right"},
+        {"Cruceta Arriba","dpad_up"},{"Cruceta Abajo","dpad_down"},
+        {"Cruceta Izq","dpad_left"},{"Cruceta Der","dpad_right"},
+        {"L Arriba","left_y_pos"},{"L Abajo","left_y_neg"},
+        {"L Derecha","left_x_pos"},{"L Izquierda","left_x_neg"},
+        {"R Arriba","right_y_pos"},{"R Abajo","right_y_neg"},
+        {"R Derecha","right_x_pos"},{"R Izquierda","right_x_neg"},
     };
-    static const int kNChoices = 15;
+    static const int kNChoices = 23;
 
     const char* hdr = (m_forTrigger == "l2")
         ? "L2  \xe2\x86\x92  Zonas de recorrido"
@@ -97,10 +101,16 @@ bool TriggerRangeModal::render() {
                     m_captureKeys.clear(); m_macroSel.clear(); m_xboxSel = -1;
                     if (m_selSect >= 0 && m_work[i].hasAction) {
                         const auto& act = m_work[i].action;
-                        if (act.type == ButtonActionType::Macro)       m_actType = H5ActionType::Macro;
+                        if (act.type == ButtonActionType::Macro)           m_actType = H5ActionType::Macro;
                         else if (act.type == ButtonActionType::Keyboard)   m_actType = H5ActionType::Keyboard;
                         else if (act.type == ButtonActionType::MouseClick) m_actType = H5ActionType::Mouse;
-                        else m_actType = H5ActionType::Xbox;
+                        else {
+                            m_actType = H5ActionType::Xbox;
+                            if (act.type == ButtonActionType::VirtualButton) {
+                                for (int ci = 0; ci < kNChoices; ++ci)
+                                    if (act.name == kChoices[ci].name) { m_xboxSel = ci; break; }
+                            }
+                        }
                     }
                     break;
                 }
@@ -178,7 +188,7 @@ bool TriggerRangeModal::render() {
             if (ImGui::Button(lbl, { bW, 0.0f })) { m_actType = t; m_captureKeys.clear(); m_macroSel.clear(); m_xboxSel = -1; }
             if (sel) ImGui::PopStyleColor();
         };
-        rTypeBtn("Xbox##rt0",    H5ActionType::Xbox);    ImGui::SameLine();
+        rTypeBtn("Mando##rt0",   H5ActionType::Xbox);    ImGui::SameLine();
         rTypeBtn("Macro##rt1",   H5ActionType::Macro);   ImGui::SameLine();
         rTypeBtn("Teclado##rt2", H5ActionType::Keyboard); ImGui::SameLine();
         rTypeBtn("Rat\xC3\xB3n##rt3", H5ActionType::Mouse);

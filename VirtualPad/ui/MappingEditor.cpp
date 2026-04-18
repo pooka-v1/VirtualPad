@@ -283,6 +283,41 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                 else if (physNow.triggerR > kTrigThresh && m_sel.h9PrevPhysState.triggerR <= kTrigThresh)
                     doTrigAssign("r2", "triggerR");
             }
+
+            // Analog stick tilt → assign source to a stick slot destination.
+            if (m_sel.physComp >= 0 && !physShort.empty()) {
+                const auto& virtComps2 = virt.getLayout().components;
+                for (int i = 0; i < (int)virtComps2.size(); ++i) {
+                    if (virtComps2[i].type != "stick") continue;
+                    float sx = 0.0f, sy = 0.0f;
+                    readStickXY(physNow, virtComps2[i].stateX, sx, sy);
+                    std::string slotDir;
+                    if      (sy >=  m_stickSelectThreshold) slotDir = "up";
+                    else if (sy <= -m_stickSelectThreshold) slotDir = "down";
+                    else if (sx >=  m_stickSelectThreshold) slotDir = "right";
+                    else if (sx <= -m_stickSelectThreshold) slotDir = "left";
+                    if (slotDir.empty()) continue;
+
+                    auto [vxId, vyId] = stickIdsFromStateX(virtComps2[i].stateX);
+                    std::string slotKey;
+                    if      (slotDir == "up")    slotKey = vyId + "_pos";
+                    else if (slotDir == "down")  slotKey = vyId + "_neg";
+                    else if (slotDir == "right") slotKey = vxId + "_pos";
+                    else if (slotDir == "left")  slotKey = vxId + "_neg";
+
+                    auto it = m_model.buttonEdits.find(physShort);
+                    if (it != m_model.buttonEdits.end() && it->second == slotKey) {
+                        m_model.buttonEdits.erase(physShort);
+                    } else {
+                        m_model.h5ActionEdits.erase(physShort);
+                        m_model.buttonEdits[physShort] = slotKey;
+                    }
+
+                    m_sel.physComp = -1; m_sel.stickAsButton = false;
+                    m_sel.dpadDir.clear(); m_sel.actionType = H5ActionType::Xbox;
+                    break;
+                }
+            }
         } else if (!m_sel.triggerSrc.empty() && m_sel.actionType == H5ActionType::Xbox) {
             // Paso 2 — gatillo como fuente: asignar target por botón/gatillo físico
             std::vector<std::string> candStates;
@@ -322,6 +357,47 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                 m_sel.triggerSrc.clear(); m_sel.actionType = H5ActionType::Xbox;
                 break;
             }
+            // Virtual stick tilt → assign trigger source to a stick slot.
+            if (!m_sel.triggerSrc.empty()) {
+                const auto& virtComps2 = virt.getLayout().components;
+                for (int i = 0; i < (int)virtComps2.size(); ++i) {
+                    if (virtComps2[i].type != "stick") continue;
+                    float sx = 0.0f, sy = 0.0f;
+                    readStickXY(physNow, virtComps2[i].stateX, sx, sy);
+                    std::string slotDir;
+                    if      (sy >=  m_stickSelectThreshold) slotDir = "up";
+                    else if (sy <= -m_stickSelectThreshold) slotDir = "down";
+                    else if (sx >=  m_stickSelectThreshold) slotDir = "right";
+                    else if (sx <= -m_stickSelectThreshold) slotDir = "left";
+                    if (slotDir.empty()) continue;
+
+                    auto [vxId, vyId] = stickIdsFromStateX(virtComps2[i].stateX);
+                    std::string slotKey;
+                    if      (slotDir == "up")    slotKey = vyId + "_pos";
+                    else if (slotDir == "down")  slotKey = vyId + "_neg";
+                    else if (slotDir == "right") slotKey = vxId + "_pos";
+                    else if (slotDir == "left")  slotKey = vxId + "_neg";
+
+                    auto it = m_model.trigActionEdits.find(m_sel.triggerSrc);
+                    bool already = (it != m_model.trigActionEdits.end() &&
+                                    it->second.type == ButtonActionType::VirtualButton &&
+                                    it->second.name == slotKey);
+                    if (already) {
+                        m_model.trigActionEdits.erase(m_sel.triggerSrc);
+                    } else {
+                        auto& ranges = (m_sel.triggerSrc == "l2") ? m_model.trigLRangeEdits
+                                                                   : m_model.trigRRangeEdits;
+                        ranges.clear();
+                        ButtonAction act;
+                        act.type = ButtonActionType::VirtualButton;
+                        act.name = slotKey;
+                        m_model.trigActionEdits[m_sel.triggerSrc] = act;
+                    }
+                    m_sel.triggerSrc.clear(); m_sel.actionType = H5ActionType::Xbox;
+                    break;
+                }
+            }
+
             // Trigger press: rising edge → TriggerPassthrough target
             {
                 constexpr float kTrigThresh2 = 0.5f;
@@ -786,6 +862,19 @@ void MappingEditor::handleClick(PadView& phys, PadView& virt, ImVec2 mouse) {
         return;
     }
 
+    // Virtual stick arrows: assign selected source to a stick slot.
+    {
+        std::string virtArrowDir;
+        int virtArrowComp = virt.hitTestStickArrow(mouse, m_virtOrigin, virtArrowDir);
+        if (virtArrowComp >= 0) {
+            bool hasSource = (m_sel.physComp >= 0 &&
+                              (phys.getLayout().components[m_sel.physComp].type != "stick" ||
+                               m_sel.stickAsButton)) ||
+                             (!m_sel.triggerSrc.empty() && m_sel.actionType == H5ActionType::Xbox);
+            if (hasSource) { onVirtArrowHit(phys, virt, virtArrowComp, virtArrowDir); return; }
+        }
+    }
+
     if (m_sel.physComp >= 0) {
         const std::string& selType = phys.getLayout().components[m_sel.physComp].type;
         if (selType == "stick" && !m_sel.stickAsButton)
@@ -1050,3 +1139,66 @@ void MappingEditor::onVirtHitTriggerSrc(PadView& virt, ImVec2 mouse) {
     if (assigned) { m_sel.triggerSrc.clear(); m_sel.actionType = H5ActionType::Xbox; }
 }
 
+// ---------------------------------------------------------------------------
+// Virtual stick arrow click: assign selected source to a stick slot.
+// dir = "up"|"down"|"left"|"right" on the virtual stick (virtComp).
+// Convention: up=Y+, down=Y-, right=X+, left=X-.
+// ---------------------------------------------------------------------------
+void MappingEditor::onVirtArrowHit(PadView& phys, PadView& virt, int virtComp, const std::string& dir) {
+    const auto& virtComps = virt.getLayout().components;
+    if (virtComp < 0 || virtComp >= (int)virtComps.size()) return;
+    auto [vxId, vyId] = stickIdsFromStateX(virtComps[virtComp].stateX);
+    if (vxId.empty()) return;
+
+    std::string slotKey;
+    if      (dir == "up")    slotKey = vyId + "_pos";
+    else if (dir == "down")  slotKey = vyId + "_neg";
+    else if (dir == "right") slotKey = vxId + "_pos";
+    else if (dir == "left")  slotKey = vxId + "_neg";
+    if (slotKey.empty()) return;
+
+    std::string source;
+    if (m_sel.physComp >= 0) {
+        const PadComponent& selComp = phys.getLayout().components[m_sel.physComp];
+        if (selComp.type == "dpad" && !m_sel.dpadDir.empty())
+            source = "dpad_" + m_sel.dpadDir;
+        else if (selComp.type == "stick" && m_sel.stickAsButton)
+            source = stateToShort(selComp.stateClick);
+        else
+            source = stateToShort(selComp.state);
+    } else if (!m_sel.triggerSrc.empty()) {
+        source = m_sel.triggerSrc;
+    }
+    if (source.empty()) return;
+
+    // Toggle: click same slot again to remove the assignment.
+    if (source == "l2" || source == "r2") {
+        // Triggers use trigActionEdits; assigning to a slot clears any range edits.
+        auto it = m_model.trigActionEdits.find(source);
+        bool alreadySlot = (it != m_model.trigActionEdits.end() &&
+                            it->second.type == ButtonActionType::VirtualButton &&
+                            it->second.name == slotKey);
+        if (alreadySlot) {
+            m_model.trigActionEdits.erase(source);
+        } else {
+            auto& ranges = (source == "l2") ? m_model.trigLRangeEdits : m_model.trigRRangeEdits;
+            ranges.clear();
+            ButtonAction act;
+            act.type = ButtonActionType::VirtualButton;
+            act.name = slotKey;
+            m_model.trigActionEdits[source] = act;
+        }
+    } else {
+        // Buttons / dpad: stored as buttonEdits[physShort] = slotDir.
+        auto it = m_model.buttonEdits.find(source);
+        if (it != m_model.buttonEdits.end() && it->second == slotKey) {
+            m_model.buttonEdits.erase(source);
+        } else {
+            m_model.h5ActionEdits.erase(source);
+            m_model.buttonEdits[source] = slotKey;
+        }
+    }
+
+    m_sel.physComp = -1; m_sel.stickAsButton = false; m_sel.dpadDir.clear();
+    m_sel.triggerSrc.clear(); m_sel.actionType = H5ActionType::Xbox;
+}

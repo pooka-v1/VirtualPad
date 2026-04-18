@@ -52,6 +52,9 @@ public:
     std::vector<RangeEdit> trigLRangeEdits;
     std::vector<RangeEdit> trigRRangeEdits;
 
+    // H6 stick slot assignments: slot key → source name.
+    std::unordered_map<std::string, std::string> stickSlotEdits;
+
     // Populate edits from the matching config entry (vid/pid must be set first).
     void reload(const std::vector<ControllerConfig>& configs);
 

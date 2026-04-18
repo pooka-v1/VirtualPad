@@ -15,6 +15,7 @@ void MappingModel::clear() {
     trigActionEdits.clear();
     trigLRangeEdits.clear();
     trigRRangeEdits.clear();
+    stickSlotEdits.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -45,9 +46,22 @@ void MappingModel::reload(const std::vector<ControllerConfig>& configs) {
             buttonEdits["dpad_" + dir] = vShort;
         for (const auto& [dir, action] : cfg.dpadActions)
             h5ActionEdits["dpad_" + dir] = action;
+        // Dpad sources assigned to stick slots are in stickSlots (not dpadRemap).
+        for (const auto& [slotDir, srcs] : cfg.stickSlots)
+            for (const auto& src : srcs)
+                if (src.rfind("dpad_", 0) == 0)
+                    buttonEdits[src] = slotDir;
 
         if (cfg.triggerLHasAction) trigActionEdits["l2"] = cfg.triggerLAction;
         if (cfg.triggerRHasAction) trigActionEdits["r2"] = cfg.triggerRAction;
+        // Trigger sources assigned to stick slots are in stickSlots (not triggerL/RAction).
+        for (const auto& [slotDir, srcs] : cfg.stickSlots)
+            for (const auto& src : srcs)
+                if (src == "l2" || src == "r2") {
+                    ButtonAction act;
+                    act.type = ButtonActionType::VirtualButton; act.physical = src; act.name = slotDir;
+                    trigActionEdits[src] = act;
+                }
 
         auto loadRanges = [](const std::vector<TriggerRange>& src,
                               std::vector<RangeEdit>& dst) {
@@ -63,6 +77,8 @@ void MappingModel::reload(const std::vector<ControllerConfig>& configs) {
         };
         loadRanges(cfg.triggerLRanges, trigLRangeEdits);
         loadRanges(cfg.triggerRRanges, trigRRangeEdits);
+        // stickSlotEdits reserved for future inverse case (analog stick → virtual component).
+        // Button-sourced slot assignments are loaded via buttonEdits (VirtualButton case above).
         break;
     }
 }
@@ -271,6 +287,10 @@ void MappingModel::save(const std::string& path) {
                 }
             }
         }
+
+        // stick_slots section reserved for future inverse case (analog stick → virtual component).
+        // Button-sourced slot assignments are saved as "virtual": "right_x_neg" in button entries.
+        ctrl.erase("stick_slots");
 
         break;
     }

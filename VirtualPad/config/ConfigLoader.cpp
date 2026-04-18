@@ -129,6 +129,12 @@ std::vector<ControllerConfig> loadControllerConfigs(const std::string& path) {
         cfg.layout_id    = c.value("layout_id", "");
         cfg.connection   = c.value("connection", "");
         cfg.buttons     = parseButtonsJson(c.at("buttons"));
+        // Derive stick slot assignments from button entries (virtual = slot direction).
+        for (const auto& [bit, action] : cfg.buttons) {
+            if (action.type == ButtonActionType::VirtualButton &&
+                !action.physical.empty() && isStickSlotDir(action.name))
+                cfg.stickSlots[action.name].push_back(action.physical);
+        }
 
         for (const auto& [source, axisJson] : c.at("axes").items()) {
             AxisMapping m;
@@ -152,9 +158,13 @@ std::vector<ControllerConfig> loadControllerConfigs(const std::string& path) {
 
         if (c.contains("dpad_remap") && c["dpad_remap"].is_object())
             for (const auto& [dir, btn] : c["dpad_remap"].items()) {
-                if (btn.is_string())
-                    cfg.dpadRemap[dir] = btn.get<std::string>();
-                else if (btn.is_object())
+                if (btn.is_string()) {
+                    const std::string val = btn.get<std::string>();
+                    if (isStickSlotDir(val))
+                        cfg.stickSlots[val].push_back("dpad_" + dir);
+                    else
+                        cfg.dpadRemap[dir] = val;
+                } else if (btn.is_object())
                     cfg.dpadActions[dir] = parseButtonAction(btn);
             }
 
@@ -183,6 +193,26 @@ std::vector<ControllerConfig> loadControllerConfigs(const std::string& path) {
             };
             parseTrigSide("l2", cfg.triggerLAction, cfg.triggerLHasAction, cfg.triggerLRanges);
             parseTrigSide("r2", cfg.triggerRAction, cfg.triggerRHasAction, cfg.triggerRRanges);
+
+            // Derive stickSlots from simple trigger actions targeting a slot direction.
+            auto deriveTrigSlot = [&](ButtonAction& act, bool& hasAct, const char* src) {
+                if (hasAct && act.type == ButtonActionType::VirtualButton &&
+                    isStickSlotDir(act.name)) {
+                    cfg.stickSlots[act.name].push_back(src);
+                    hasAct = false;
+                }
+            };
+            deriveTrigSlot(cfg.triggerLAction, cfg.triggerLHasAction, "l2");
+            deriveTrigSlot(cfg.triggerRAction, cfg.triggerRHasAction, "r2");
+        }
+
+        if (c.contains("stick_slots") && c["stick_slots"].is_object()) {
+            for (const auto& [slot, val] : c["stick_slots"].items()) {
+                if (val.is_string())
+                    cfg.stickSlots[slot].push_back(val.get<std::string>());
+                else if (val.is_object() && val.contains("source"))
+                    cfg.stickSlots[slot].push_back(val["source"].get<std::string>());
+            }
         }
 
         if (c.contains("touchpad")) {

@@ -1,6 +1,7 @@
 #include "HIDInputSource.h"
 #include "../GamepadState.h"
 #include "../Log.h"
+#include "StickSlotsHelper.h"
 #include <hidsdi.h>
 #include <algorithm>
 #include <vector>
@@ -296,6 +297,13 @@ bool HIDInputSource::read(GamepadState& state) {
     // so it only affects virtual output and isn't intercepted by dpadRemap.
     for (const auto& [bit, action] : m_config.buttons) {
         if (action.type != ButtonActionType::VirtualButton) continue;
+        if (!action.physical.empty()) {
+            bool srcIsSlot = false;
+            for (const auto& [slot, srcs] : m_config.stickSlots)
+                for (const auto& src : srcs)
+                    if (src == action.physical) { srcIsSlot = true; break; }
+            if (srcIsSlot) continue;
+        }
         bool pressed = (m_lastButtonMask & (1u << (bit - 1))) != 0;
         if (!pressed) continue;
         if      (action.name == "dpad_up")    state.dpadUp    = true;
@@ -303,6 +311,11 @@ bool HIDInputSource::read(GamepadState& state) {
         else if (action.name == "dpad_left")  state.dpadLeft  = true;
         else if (action.name == "dpad_right") state.dpadRight = true;
     }
+
+    // Stick slots: override virtual stick half-axes from physical sources.
+    // m_physicalState has physical buttons (applyButtons), stickId axes (applyAxes),
+    // triggers (applyAxes), and dpad (lines above, from hat switch).
+    applyStickSlots(m_config, m_physicalState, state);
 
     return true;
 }
@@ -408,8 +421,20 @@ void HIDInputSource::applyButtons(PCHAR buf, ULONG bufLen, GamepadState& state) 
     // Triggers also reset each frame so button-mapped triggers clear when released
     state.triggerL = state.triggerR = 0.0f;
 
+    // Buttons whose physical identity is a stick slot source lose their virtual
+    // action entirely (one input → one output). Checked against action.physical
+    // so unrelated buttons remapped to the same virtual target are not suppressed.
+    auto isSlotSrc = [&](const std::string& phys) -> bool {
+        if (phys.empty() || m_config.stickSlots.empty()) return false;
+        for (const auto& [slot, srcs] : m_config.stickSlots)
+            for (const auto& src : srcs)
+                if (src == phys) return true;
+        return false;
+    };
+
     // Virtual remapping: use action.name so ViGEm receives the mapped output.
     for (const auto& [bit, action] : m_config.buttons) {
+        if (isSlotSrc(action.physical)) continue;
         bool pressed = (m_lastButtonMask & (1u << (bit - 1))) != 0;
         switch (action.type) {
         case ButtonActionType::VirtualButton:

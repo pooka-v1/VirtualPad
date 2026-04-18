@@ -124,6 +124,14 @@ static void applyVirtualBtnByName(GamepadState& state, const std::string& name, 
     else if (name == "down"  || name == "dpad_down")  state.dpadDown = true;
     else if (name == "left"  || name == "dpad_left")  state.dpadLeft = true;
     else if (name == "right" || name == "dpad_right") state.dpadRight = true;
+    else if (name == "left_y_pos")  state.leftY  =  1.0f;
+    else if (name == "left_y_neg")  state.leftY  = -1.0f;
+    else if (name == "left_x_pos")  state.leftX  =  1.0f;
+    else if (name == "left_x_neg")  state.leftX  = -1.0f;
+    else if (name == "right_y_pos") state.rightY =  1.0f;
+    else if (name == "right_y_neg") state.rightY = -1.0f;
+    else if (name == "right_x_pos") state.rightX =  1.0f;
+    else if (name == "right_x_neg") state.rightX = -1.0f;
 }
 
 // press=true  → press all keys in order

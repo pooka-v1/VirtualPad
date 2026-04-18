@@ -5,6 +5,14 @@
 #include <cstdint>
 
 enum class ButtonActionType  { VirtualButton, Trigger, TriggerPassthrough, Bot, Macro, Keyboard, MouseClick };
+
+// Returns true if s is a stick half-axis slot direction (e.g. "right_x_neg").
+inline bool isStickSlotDir(const std::string& s) {
+    return s == "left_x_pos"  || s == "left_x_neg"  ||
+           s == "left_y_pos"  || s == "left_y_neg"  ||
+           s == "right_x_pos" || s == "right_x_neg" ||
+           s == "right_y_pos" || s == "right_y_neg";
+}
 enum class HalfAxisActionType { Analog, VirtualButton, Dpad, Macro, Keyboard, Mouse };
 
 struct ButtonAction {
@@ -95,4 +103,12 @@ struct ControllerConfig {
     // Physical trigger → ranged actions (if non-empty, overrides the simple action above)
     std::vector<TriggerRange> triggerLRanges;
     std::vector<TriggerRange> triggerRRanges;
+
+    // Stick slot assignments: slot key → source name.
+    // Slot keys: "left_x_pos", "left_x_neg", "left_y_pos", "left_y_neg",
+    //            "right_x_pos", "right_x_neg", "right_y_pos", "right_y_neg".
+    // Sources: physShort ("a","b",...), "dpad_up/down/left/right", "l2", "r2".
+    // Undefined slots fall through to the axes mapping for that axis.
+    // Trigger sources without ranges: analog (0..1). With ranges: digital (0 or 1).
+    std::unordered_map<std::string, std::vector<std::string>> stickSlots; // slot → [sources] (OR: any active drives the slot)
 };

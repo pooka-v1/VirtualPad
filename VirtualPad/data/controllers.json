@@ -274,8 +274,36 @@
       "source_name": "8BitDo Pro 2 (D-mode)",
       "trigger_actions": {
         "l2": {
-          "target": "l2",
-          "type": "trigger_passthrough"
+          "ranges": [
+            {
+              "action": {
+                "virtual": "left_y_pos"
+              },
+              "from": 0.10000000149011612,
+              "to": 0.32499998807907104
+            },
+            {
+              "action": {
+                "virtual": "left_y_neg"
+              },
+              "from": 0.32499998807907104,
+              "to": 0.550000011920929
+            },
+            {
+              "action": {
+                "virtual": "left_x_pos"
+              },
+              "from": 0.550000011920929,
+              "to": 0.7749999761581421
+            },
+            {
+              "action": {
+                "virtual": "left_x_neg"
+              },
+              "from": 0.7749999761581421,
+              "to": 1.0
+            }
+          ]
         }
       },
       "vid": "2DC8"
