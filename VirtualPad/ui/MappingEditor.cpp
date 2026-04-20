@@ -222,6 +222,49 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                 bool valid = false;
                 for (const auto& s : m_acceptedXbox) if (virtShort == s) { valid = true; break; }
 
+                // ── Axis-action mode: stick direction seleccionada → asignar VirtualButton/Dpad ──
+                if (!m_sel.stickDir.empty()) {
+                    auto [xId9, yId9] = stickIdsFromStateX(selComp2.stateX);
+                    std::string axisKey9;
+                    if      (m_sel.stickDir == "up")    axisKey9 = yId9 + "_pos";
+                    else if (m_sel.stickDir == "down")  axisKey9 = yId9 + "_neg";
+                    else if (m_sel.stickDir == "right") axisKey9 = xId9 + "_pos";
+                    else if (m_sel.stickDir == "left")  axisKey9 = xId9 + "_neg";
+                    bool isDpad9 = (virtShort.rfind("dpad_", 0) == 0);
+                    if ((valid || isDpad9) && !axisKey9.empty()) {
+                        HalfAxisAction ha9;
+                        if (isDpad9) {
+                            ha9.type = HalfAxisActionType::Dpad;
+                            ha9.target = virtShort.substr(5); // "up"/"down"/"left"/"right"
+                        } else {
+                            ha9.type = HalfAxisActionType::VirtualButton;
+                            ha9.target = virtShort;
+                        }
+                        auto it9 = m_model.axisActionEdits.find(axisKey9);
+                        bool already9 = (it9 != m_model.axisActionEdits.end() &&
+                                         it9->second.type == ha9.type &&
+                                         it9->second.target == ha9.target);
+                        if (already9) {
+                            m_model.axisActionEdits.erase(axisKey9);
+                            m_sel.flashComp = -1; m_sel.flashTimer = 0.0f; m_sel.flashVirtShort.clear();
+                        } else {
+                            m_model.axisActionEdits[axisKey9] = ha9;
+                            if (!isDpad9) {
+                                int fc = findCompByState(virt.getLayout(), shortToState(virtShort));
+                                m_sel.flashComp = fc; m_sel.flashTimer = 0.5f;
+                                m_sel.flashVirtShort = shortToState(virtShort);
+                            } else {
+                                m_sel.flashComp = -1; m_sel.flashTimer = 0.0f; m_sel.flashVirtShort.clear();
+                            }
+                        }
+                        m_sel.physComp = -1; m_sel.stickDir.clear();
+                        m_sel.stickAsButton = false; m_sel.actionType = H5ActionType::Xbox;
+                    } else {
+                        m_sel.h9ErrorTimer = 2.0f;
+                    }
+                    break;
+                }
+
                 if (valid) {
                     if (!physShort.empty()) {
                         m_model.h5ActionEdits.erase(physShort);
@@ -483,7 +526,39 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                     activateState(virtDisplay, shortToState(virtShort));
                 }
             } else if (selComp.type == "stick") {
-                (void)selComp;
+                // Show current axis_action assignment in virtual display
+                if (!m_sel.stickDir.empty()) {
+                    auto [xId, yId] = stickIdsFromStateX(selComp.stateX);
+                    std::string axisKey;
+                    if      (m_sel.stickDir == "up")    axisKey = yId + "_pos";
+                    else if (m_sel.stickDir == "down")  axisKey = yId + "_neg";
+                    else if (m_sel.stickDir == "right") axisKey = xId + "_pos";
+                    else if (m_sel.stickDir == "left")  axisKey = xId + "_neg";
+                    auto it = m_model.axisActionEdits.find(axisKey);
+                    if (it != m_model.axisActionEdits.end()) {
+                        const HalfAxisAction& ha = it->second;
+                        if (ha.type == HalfAxisActionType::VirtualButton)
+                            activateState(virtDisplay, shortToState(ha.target));
+                        else if (ha.type == HalfAxisActionType::Dpad) {
+                            if      (ha.target == "up")    virtDisplay.dpadUp    = true;
+                            else if (ha.target == "down")  virtDisplay.dpadDown  = true;
+                            else if (ha.target == "left")  virtDisplay.dpadLeft  = true;
+                            else if (ha.target == "right") virtDisplay.dpadRight = true;
+                        } else if (ha.type == HalfAxisActionType::Trigger) {
+                            if (ha.target == "l2" || ha.target == "trigger_l") virtDisplay.triggerL = 1.0f;
+                            else                                                virtDisplay.triggerR = 1.0f;
+                        } else if (ha.type == HalfAxisActionType::StickSlot) {
+                            if      (ha.target == "left_x_pos")  virtDisplay.leftX  =  1.0f;
+                            else if (ha.target == "left_x_neg")  virtDisplay.leftX  = -1.0f;
+                            else if (ha.target == "left_y_pos")  virtDisplay.leftY  =  1.0f;
+                            else if (ha.target == "left_y_neg")  virtDisplay.leftY  = -1.0f;
+                            else if (ha.target == "right_x_pos") virtDisplay.rightX =  1.0f;
+                            else if (ha.target == "right_x_neg") virtDisplay.rightX = -1.0f;
+                            else if (ha.target == "right_y_pos") virtDisplay.rightY =  1.0f;
+                            else if (ha.target == "right_y_neg") virtDisplay.rightY = -1.0f;
+                        }
+                    }
+                }
             } else if (selComp.type == "dpad" && !m_sel.dpadDir.empty()) {
                 std::string dpadState = dpadDirToState(selComp, m_sel.dpadDir);
                 activateState(physDisplay, dpadState);
@@ -600,7 +675,16 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                    (!m_sel.stickAsButton || m_sel.actionType == H5ActionType::Xbox)) {
             if (m_sel.stickAsButton)
                 msg = "Elige en el virtual o pulsa el bot\xC3\xB3n f\xC3\xADsico que quieras asignarle";
-            else
+            else if (!m_sel.stickDir.empty()) {
+                if (m_sel.actionType == H5ActionType::Xbox)
+                    msg = "Haz clic en el bot\xC3\xB3n, stick o cruceta virtual para asignar";
+                else if (m_sel.actionType == H5ActionType::Keyboard)
+                    msg = m_sel.captureKeys.empty()
+                        ? "Pulsa las teclas del combo  (L1+R1 o A+B para cancelar)"
+                        : "Pulsa m\xC3\xA1s teclas o haz clic en Asignar";
+                else
+                    msg = "Elige la acci\xC3\xB3n del semieje en el panel";
+            } else
                 msg = "Haz clic en el stick o cruceta virtual al que quieres asignar";
         } else if (m_sel.actionType == H5ActionType::Keyboard) {
             msg = m_sel.captureKeys.empty()
@@ -721,7 +805,125 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
             }
         }
     } // H5 block
-    } // if (m_sel.physComp >= 0)
+    // ── H6 T4: axis_actions panel (stick direction selected) ─────────────────
+    if (m_sel.physComp >= 0) {
+        const auto& physComps4 = phys.getLayout().components;
+        if (m_sel.physComp < (int)physComps4.size() &&
+            physComps4[m_sel.physComp].type == "stick" &&
+            !m_sel.stickAsButton && !m_sel.stickDir.empty()) {
+
+            const auto& selComp4 = physComps4[m_sel.physComp];
+            auto [xId4, yId4] = stickIdsFromStateX(selComp4.stateX);
+            std::string axisKey;
+            if      (m_sel.stickDir == "up")    axisKey = yId4 + "_pos";
+            else if (m_sel.stickDir == "down")  axisKey = yId4 + "_neg";
+            else if (m_sel.stickDir == "right") axisKey = xId4 + "_pos";
+            else if (m_sel.stickDir == "left")  axisKey = xId4 + "_neg";
+
+            if (!axisKey.empty()) {
+                float availW4 = m_virtOrigin.x + virt.getLayout().W - m_physOrigin.x;
+                ImGui::Spacing();
+
+                // Direction label
+                {
+                    float hdrW = ImGui::CalcTextSize(axisKey.c_str()).x;
+                    float offX = (availW4 - hdrW) * 0.5f;
+                    if (offX > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX);
+                    ImGui::TextColored({ 1.0f, 0.86f, 0.0f, 1.0f }, "%s", axisKey.c_str());
+                }
+
+                // Tab buttons
+                constexpr float kBtnW = 80.0f;
+                float totalW = kBtnW * 5 + ImGui::GetStyle().ItemSpacing.x * 4;
+                float offX = (availW4 - totalW) * 0.5f;
+                if (offX > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX);
+                auto typeBtn4 = [&](const char* label, H5ActionType type) {
+                    bool s = (m_sel.actionType == type);
+                    if (s) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+                    if (ImGui::Button(label, { kBtnW, 0.0f })) { m_sel.actionType = type; m_sel.captureKeys.clear(); }
+                    if (s) ImGui::PopStyleColor();
+                };
+                typeBtn4("Mando##axt0",        H5ActionType::Xbox);      ImGui::SameLine();
+                typeBtn4("Macro##axt1",         H5ActionType::Macro);     ImGui::SameLine();
+                typeBtn4("Teclado##axt2",       H5ActionType::Keyboard);  ImGui::SameLine();
+                typeBtn4("Rat\xC3\xB3n##axt3",  H5ActionType::Mouse);     ImGui::SameLine();
+                typeBtn4("Mov.Rat\xC3\xB3n##axt4", H5ActionType::MouseMove);
+
+                ImGui::Spacing();
+
+                if (m_sel.actionType == H5ActionType::Macro) {
+                    if (!m_macroNamesLoaded) {
+                        m_macroNames.clear();
+                        try {
+                            std::ifstream f("data/macros.json");
+                            if (f.is_open()) { json j = json::parse(f); for (auto& [k,v] : j.items()) m_macroNames.push_back(k); }
+                        } catch (...) {}
+                        m_macroNamesLoaded = true;
+                    }
+                    if (ActionPanel::renderMacroCombo("mac_ax", m_sel.macroSel, m_macroNames, availW4)) {
+                        HalfAxisAction ha;
+                        ha.type = HalfAxisActionType::Macro; ha.target = m_sel.macroSel;
+                        m_model.axisActionEdits[axisKey] = ha;
+                        m_sel.physComp = -1; m_sel.stickDir.clear();
+                        m_sel.actionType = H5ActionType::Xbox; m_sel.macroSel.clear();
+                    }
+                } else if (m_sel.actionType == H5ActionType::Keyboard) {
+                    bool cancel = (physNow.btnLB && physNow.btnRB) || (physNow.btnA && physNow.btnB);
+                    if (cancel) { m_sel.actionType = H5ActionType::Xbox; m_sel.captureKeys.clear(); }
+                    else if (ActionPanel::renderKeyboardCapture("kb_ax", m_sel.captureKeys, availW4)) {
+                        HalfAxisAction ha;
+                        ha.type = HalfAxisActionType::Keyboard;
+                        for (const auto& p : m_sel.captureKeys) ha.keys.push_back(p.first);
+                        m_model.axisActionEdits[axisKey] = ha;
+                        m_sel.physComp = -1; m_sel.stickDir.clear();
+                        m_sel.actionType = H5ActionType::Xbox; m_sel.captureKeys.clear();
+                    }
+                } else if (m_sel.actionType == H5ActionType::Mouse) {
+                    std::string mbResult;
+                    if (ActionPanel::renderMouseButtons("mb_ax", mbResult, availW4)) {
+                        HalfAxisAction ha;
+                        ha.type = HalfAxisActionType::MouseClick; ha.mouseButton = mbResult;
+                        m_model.axisActionEdits[axisKey] = ha;
+                        m_sel.physComp = -1; m_sel.stickDir.clear();
+                        m_sel.actionType = H5ActionType::Xbox;
+                    }
+                } else if (m_sel.actionType == H5ActionType::MouseMove) {
+                    float panelW = 280.0f;
+                    float offX2 = (availW4 - panelW) * 0.5f;
+                    if (offX2 > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX2);
+                    ImGui::SetNextItemWidth(100.0f);
+                    ImGui::SliderFloat("Vel.##axspd", &m_sel.axisMouseSpeed, 1.0f, 50.0f, "%.0f");
+                    ImGui::SameLine();
+                    const char* mouseAxes[] = { "X", "Y" };
+                    int axIdx = (m_sel.axisMouseAxis == "mouse_y") ? 1 : 0;
+                    ImGui::SetNextItemWidth(60.0f);
+                    if (ImGui::Combo("Eje##axax", &axIdx, mouseAxes, 2))
+                        m_sel.axisMouseAxis = (axIdx == 1) ? "mouse_y" : "mouse_x";
+                    ImGui::SameLine();
+                    if (ImGui::Button("Asignar##axmov")) {
+                        HalfAxisAction ha;
+                        ha.type = HalfAxisActionType::MouseMove;
+                        ha.target = m_sel.axisMouseAxis; ha.speed = m_sel.axisMouseSpeed;
+                        m_model.axisActionEdits[axisKey] = ha;
+                        m_sel.physComp = -1; m_sel.stickDir.clear();
+                        m_sel.actionType = H5ActionType::Xbox;
+                    }
+                }
+                // Mando mode: user clicks virtual pad → onVirtHitAxisAction
+
+                // Clear button if already assigned
+                if (m_model.axisActionEdits.count(axisKey)) {
+                    ImGui::Spacing();
+                    float clearW = 100.0f;
+                    float offX3 = (availW4 - clearW) * 0.5f;
+                    if (offX3 > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX3);
+                    if (ImGui::Button("Limpiar##axclr", { clearW, 0.0f }))
+                        m_model.axisActionEdits.erase(axisKey);
+                }
+            }
+        }
+    } // H6 T4
+    } // physComp >= 0 (H5/H6 panel)
 
     // ── H7: UI para gatillo como fuente ──────────────────────────────────────
     if (!m_sel.triggerSrc.empty()) {
@@ -877,10 +1079,14 @@ void MappingEditor::handleClick(PadView& phys, PadView& virt, ImVec2 mouse) {
 
     if (m_sel.physComp >= 0) {
         const std::string& selType = phys.getLayout().components[m_sel.physComp].type;
-        if (selType == "stick" && !m_sel.stickAsButton)
-            onVirtHitPhysStick(phys, virt, mouse);
-        else if (m_sel.actionType == H5ActionType::Xbox)
+        if (selType == "stick" && !m_sel.stickAsButton) {
+            if (!m_sel.stickDir.empty() && m_sel.actionType == H5ActionType::Xbox)
+                onVirtHitAxisAction(phys, virt, mouse);
+            else if (m_sel.stickDir.empty())
+                onVirtHitPhysStick(phys, virt, mouse);
+        } else if (m_sel.actionType == H5ActionType::Xbox) {
             onVirtHitPhysButton(phys, virt, mouse);
+        }
         return;
     }
 
@@ -894,6 +1100,8 @@ void MappingEditor::onArrowHit(int arrowComp, const std::string& dir) {
         m_sel.physComp = -1; m_sel.stickDir.clear(); m_sel.stickAsButton = false;
     } else {
         m_sel.physComp = arrowComp; m_sel.stickDir = dir; m_sel.stickAsButton = false;
+        m_sel.actionType = H5ActionType::Xbox;
+        m_sel.triggerSrc.clear(); m_sel.dpadDir.clear();
         m_sel.captureKeys.clear(); m_sel.macroSel.clear();
     }
 }
@@ -1201,4 +1409,121 @@ void MappingEditor::onVirtArrowHit(PadView& phys, PadView& virt, int virtComp, c
 
     m_sel.physComp = -1; m_sel.stickAsButton = false; m_sel.dpadDir.clear();
     m_sel.triggerSrc.clear(); m_sel.actionType = H5ActionType::Xbox;
+}
+
+// ---------------------------------------------------------------------------
+// Virtual pad click when a stick half-axis (stickDir) is selected (H6 T4)
+// ---------------------------------------------------------------------------
+void MappingEditor::onVirtHitAxisAction(PadView& phys, PadView& virt, ImVec2 mouse) {
+    const auto& selComp = phys.getLayout().components[m_sel.physComp];
+    auto [xId, yId] = stickIdsFromStateX(selComp.stateX);
+    std::string axisKey;
+    if      (m_sel.stickDir == "up")    axisKey = yId + "_pos";
+    else if (m_sel.stickDir == "down")  axisKey = yId + "_neg";
+    else if (m_sel.stickDir == "right") axisKey = xId + "_pos";
+    else if (m_sel.stickDir == "left")  axisKey = xId + "_neg";
+    if (axisKey.empty()) return;
+
+    // Virtual stick arrow → StickSlot
+    std::string virtArrowDir;
+    int virtArrowComp = virt.hitTestStickArrow(mouse, m_virtOrigin, virtArrowDir);
+    if (virtArrowComp >= 0) {
+        const auto& virtComps = virt.getLayout().components;
+        auto [vxId, vyId] = stickIdsFromStateX(virtComps[virtArrowComp].stateX);
+        if (!vxId.empty()) {
+            std::string slotKey;
+            if      (virtArrowDir == "up")    slotKey = vyId + "_pos";
+            else if (virtArrowDir == "down")  slotKey = vyId + "_neg";
+            else if (virtArrowDir == "right") slotKey = vxId + "_pos";
+            else if (virtArrowDir == "left")  slotKey = vxId + "_neg";
+            if (!slotKey.empty()) {
+                auto it = m_model.axisActionEdits.find(axisKey);
+                bool already = (it != m_model.axisActionEdits.end() &&
+                                it->second.type == HalfAxisActionType::StickSlot &&
+                                it->second.target == slotKey);
+                if (already) {
+                    m_model.axisActionEdits.erase(axisKey);
+                } else {
+                    HalfAxisAction ha;
+                    ha.type = HalfAxisActionType::StickSlot; ha.target = slotKey;
+                    m_model.axisActionEdits[axisKey] = ha;
+                }
+            }
+        }
+        m_sel.physComp = -1; m_sel.stickDir.clear();
+        return;
+    }
+
+    int virtHit = virt.hitTest(mouse, m_virtOrigin);
+    if (virtHit < 0) return;
+
+    const auto& virtComp = virt.getLayout().components[virtHit];
+    bool assigned = false;
+
+    if (virtComp.type == "button") {
+        const std::string& vState = virtComp.state;
+        if (vState == "triggerL" || vState == "triggerR") {
+            std::string trigTarget = (vState == "triggerL") ? "l2" : "r2";
+            auto it = m_model.axisActionEdits.find(axisKey);
+            bool already = (it != m_model.axisActionEdits.end() &&
+                            it->second.type == HalfAxisActionType::Trigger &&
+                            it->second.target == trigTarget);
+            if (already) {
+                m_model.axisActionEdits.erase(axisKey);
+            } else {
+                HalfAxisAction ha;
+                ha.type = HalfAxisActionType::Trigger; ha.target = trigTarget;
+                m_model.axisActionEdits[axisKey] = ha;
+            }
+            assigned = true;
+        } else {
+            std::string vShort = stateToShort(vState);
+            if (!vShort.empty()) {
+                auto it = m_model.axisActionEdits.find(axisKey);
+                bool already = (it != m_model.axisActionEdits.end() &&
+                                it->second.type == HalfAxisActionType::VirtualButton &&
+                                it->second.target == vShort);
+                if (already) m_model.axisActionEdits.erase(axisKey);
+                else {
+                    HalfAxisAction ha;
+                    ha.type = HalfAxisActionType::VirtualButton; ha.target = vShort;
+                    m_model.axisActionEdits[axisKey] = ha;
+                }
+                assigned = true;
+            }
+        }
+    } else if (virtComp.type == "stick" && !virtComp.stateClick.empty()) {
+        std::string vShort = stateToShort(virtComp.stateClick);
+        if (!vShort.empty()) {
+            auto it = m_model.axisActionEdits.find(axisKey);
+            bool already = (it != m_model.axisActionEdits.end() &&
+                            it->second.type == HalfAxisActionType::VirtualButton &&
+                            it->second.target == vShort);
+            if (already) m_model.axisActionEdits.erase(axisKey);
+            else {
+                HalfAxisAction ha;
+                ha.type = HalfAxisActionType::VirtualButton; ha.target = vShort;
+                m_model.axisActionEdits[axisKey] = ha;
+            }
+            assigned = true;
+        }
+    } else if (virtComp.type == "dpad") {
+        std::string vdir = dpadDirFromMouse(mouse,
+            m_virtOrigin.x + virtComp.cx, m_virtOrigin.y + virtComp.cy);
+        if (!vdir.empty()) {
+            auto it = m_model.axisActionEdits.find(axisKey);
+            bool already = (it != m_model.axisActionEdits.end() &&
+                            it->second.type == HalfAxisActionType::Dpad &&
+                            it->second.target == vdir);
+            if (already) m_model.axisActionEdits.erase(axisKey);
+            else {
+                HalfAxisAction ha;
+                ha.type = HalfAxisActionType::Dpad; ha.target = vdir;
+                m_model.axisActionEdits[axisKey] = ha;
+            }
+            assigned = true;
+        }
+    }
+
+    if (assigned) { m_sel.physComp = -1; m_sel.stickDir.clear(); }
 }

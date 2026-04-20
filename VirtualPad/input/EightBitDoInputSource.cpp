@@ -54,6 +54,8 @@ bool EightBitDoInputSource::read(GamepadState& state) {
     state.btnL3 = state.btnR3 = false;
     state.btnL4 = state.btnR4 = false;
     state.btnLP = state.btnRP = false;
+    // Dpad bits also reset so axis_actions Dpad assignments clear when stick returns to neutral
+    state.dpadUp = state.dpadDown = state.dpadLeft = state.dpadRight = false;
 
     // Buttons whose physical identity is a stick slot source lose their virtual
     // action entirely (one input → one output). Identified by action.physical so
@@ -203,17 +205,61 @@ bool EightBitDoInputSource::read(GamepadState& state) {
                         else if (ha.target == "right") state.dpadRight = true;
                     }
                     break;
+                case HalfAxisActionType::Trigger:
+                    if (absV > ha.threshold) {
+                        if      (ha.target == "l2" || ha.target == "trigger_l") state.triggerL = 1.0f;
+                        else if (ha.target == "r2" || ha.target == "trigger_r") state.triggerR = 1.0f;
+                    }
+                    break;
+                case HalfAxisActionType::StickSlot:
+                    if (absV > ha.threshold) {
+                        if      (ha.target == "left_x_pos")  state.leftX  =  1.0f;
+                        else if (ha.target == "left_x_neg")  state.leftX  = -1.0f;
+                        else if (ha.target == "left_y_pos")  state.leftY  =  1.0f;
+                        else if (ha.target == "left_y_neg")  state.leftY  = -1.0f;
+                        else if (ha.target == "right_x_pos") state.rightX =  1.0f;
+                        else if (ha.target == "right_x_neg") state.rightX = -1.0f;
+                        else if (ha.target == "right_y_pos") state.rightY =  1.0f;
+                        else if (ha.target == "right_y_neg") state.rightY = -1.0f;
+                    }
+                    break;
+                case HalfAxisActionType::MouseMove:
+                    if      (ha.target == "mouse_x") state.mouseX += absV;
+                    else if (ha.target == "mouse_y") state.mouseY += absV;
+                    break;
+                case HalfAxisActionType::Ranges:
+                    for (const auto& r : ha.ranges) {
+                        if (absV < r.from || absV > r.to || !r.hasAction) continue;
+                        switch (r.action.type) {
+                        case ButtonActionType::VirtualButton: setVBtn(r.action.name, true); break;
+                        case ButtonActionType::Keyboard:
+                        case ButtonActionType::MouseClick:
+                        case ButtonActionType::Macro:
+                            m_activeAxisActions.push_back(key); break;
+                        default: break;
+                        }
+                        break;
+                    }
+                    break;
                 case HalfAxisActionType::Macro:
                 case HalfAxisActionType::Keyboard:
-                case HalfAxisActionType::Mouse:
+                case HalfAxisActionType::MouseClick:
                     if (absV > ha.threshold)
                         m_activeAxisActions.push_back(key);
                     break;
                 }
+                // Suppress raw axis contribution for this half when redirected to a non-analog target.
+                if (ha.type != HalfAxisActionType::Analog && ha.type != HalfAxisActionType::Ranges) {
+                    if      (mapping.target == "left_x")  state.leftX  = (halfV < 0.0f) ? (state.leftX  > 0.0f ? state.leftX  : 0.0f) : (state.leftX  < 0.0f ? state.leftX  : 0.0f);
+                    else if (mapping.target == "left_y")  state.leftY  = (halfV < 0.0f) ? (state.leftY  > 0.0f ? state.leftY  : 0.0f) : (state.leftY  < 0.0f ? state.leftY  : 0.0f);
+                    else if (mapping.target == "right_x") state.rightX = (halfV < 0.0f) ? (state.rightX > 0.0f ? state.rightX : 0.0f) : (state.rightX < 0.0f ? state.rightX : 0.0f);
+                    else if (mapping.target == "right_y") state.rightY = (halfV < 0.0f) ? (state.rightY > 0.0f ? state.rightY : 0.0f) : (state.rightY < 0.0f ? state.rightY : 0.0f);
+                }
             };
 
-            if (v >= 0.0f) processHalf(source + "_pos", v);
-            else           processHalf(source + "_neg", v);
+            // Key uses virtual axis name (mapping.target) so JSON entries match: "left_x_pos" etc.
+            if (v >= 0.0f) processHalf(mapping.target + "_pos", v);
+            else           processHalf(mapping.target + "_neg", v);
         }
     }
 

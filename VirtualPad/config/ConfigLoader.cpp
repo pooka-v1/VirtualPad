@@ -61,38 +61,79 @@ static ButtonAction parseButtonAction(const json& val) {
 }
 
 // Parses an axis_actions JSON object into a map.
-// Key format: "<axis_source>_pos" or "<axis_source>_neg"
+// Key format: "<virtual_axis>_pos" or "<virtual_axis>_neg" (e.g. "left_x_pos", "right_y_neg")
 static std::unordered_map<std::string, HalfAxisAction> parseAxisActionsJson(const json& j) {
     std::unordered_map<std::string, HalfAxisAction> result;
     for (const auto& [key, val] : j.items()) {
         if (!key.empty() && key[0] == '_') continue;
         HalfAxisAction a;
-        std::string type = val.value("type", "analog");
-        if (type == "analog") {
-            a.type   = HalfAxisActionType::Analog;
-            a.target = val.value("target",  std::string{});
-            a.outDir = val.value("out_dir", std::string{});
-            a.scale  = val.value("scale",   1.0f);
-        } else if (type == "button") {
-            a.type   = HalfAxisActionType::VirtualButton;
-            a.target = val.value("target", std::string{});
-        } else if (type == "dpad") {
-            a.type   = HalfAxisActionType::Dpad;
-            a.target = val.value("target", std::string{});
-        } else if (type == "macro") {
-            a.type      = HalfAxisActionType::Macro;
-            a.target    = val.value("target",    std::string{});
-            a.execution = val.value("execution", std::string{});
-        } else if (type == "keyboard") {
-            a.type = HalfAxisActionType::Keyboard;
-            if (val.contains("keys"))
-                for (const auto& k : val["keys"])
-                    a.keys.push_back(k.get<std::string>());
-        } else if (type == "mouse") {
-            a.type        = HalfAxisActionType::Mouse;
-            a.mouseButton = val.value("button", "left");
+
+        if (val.contains("ranges") && val["ranges"].is_array()) {
+            a.type = HalfAxisActionType::Ranges;
+            for (const auto& r : val["ranges"]) {
+                TriggerRange tr;
+                tr.from = r.value("from", 0.0f);
+                tr.to   = r.value("to",   1.0f);
+                if (r.contains("action")) {
+                    tr.action    = parseButtonAction(r["action"]);
+                    tr.hasAction = true;
+                }
+                a.ranges.push_back(tr);
+            }
+        } else if (val.contains("virtual")) {
+            std::string v = val["virtual"].get<std::string>();
+            if (v == "dpad_up" || v == "dpad_down" || v == "dpad_left" || v == "dpad_right") {
+                a.type   = HalfAxisActionType::Dpad;
+                a.target = v.substr(5); // strip "dpad_" → "up"|"down"|"left"|"right"
+            } else if (isStickSlotDir(v)) {
+                a.type   = HalfAxisActionType::StickSlot;
+                a.target = v;
+            } else if (v == "l2" || v == "r2" || v == "trigger_l" || v == "trigger_r") {
+                a.type   = HalfAxisActionType::Trigger;
+                a.target = v;
+            } else {
+                a.type   = HalfAxisActionType::VirtualButton;
+                a.target = v;
+            }
+            a.threshold = val.value("threshold", 0.5f);
+        } else if (val.contains("target") && !val.contains("type")) {
+            // Proportional mouse: { "target": "mouse_x|mouse_y", "speed": N }
+            a.type   = HalfAxisActionType::MouseMove;
+            a.target = val["target"].get<std::string>();
+            a.speed  = val.value("speed", 15.0f);
+        } else if (val.contains("type")) {
+            std::string type = val["type"].get<std::string>();
+            if (type == "keyboard") {
+                a.type = HalfAxisActionType::Keyboard;
+                if (val.contains("keys"))
+                    for (const auto& k : val["keys"])
+                        a.keys.push_back(k.get<std::string>());
+            } else if (type == "macro") {
+                a.type      = HalfAxisActionType::Macro;
+                a.target    = val.value("name", val.value("target", std::string{}));
+                a.execution = val.value("execution", std::string{});
+            } else if (type == "mouse_click") {
+                a.type        = HalfAxisActionType::MouseClick;
+                a.mouseButton = val.value("button", "left");
+            } else if (type == "analog") {
+                // Legacy: { "type": "analog", "target": "left_x", "out_dir": "pos", "scale": 1.0 }
+                a.type   = HalfAxisActionType::Analog;
+                a.target = val.value("target",  std::string{});
+                a.outDir = val.value("out_dir", std::string{});
+                a.scale  = val.value("scale",   1.0f);
+            } else if (type == "button") {
+                a.type   = HalfAxisActionType::VirtualButton;
+                a.target = val.value("target", std::string{});
+            } else if (type == "dpad") {
+                a.type   = HalfAxisActionType::Dpad;
+                a.target = val.value("target", std::string{});
+            } else if (type == "mouse") {
+                a.type        = HalfAxisActionType::MouseClick;
+                a.mouseButton = val.value("button", "left");
+            }
+            a.threshold = val.value("threshold", 0.5f);
         }
-        a.threshold = val.value("threshold", 0.5f);
+
         result[key] = std::move(a);
     }
     return result;

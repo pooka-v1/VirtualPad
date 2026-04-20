@@ -90,4 +90,5 @@ private:
     void onVirtHitPhysStick(PadView& phys, PadView& virt, ImVec2 mouse);
     void onVirtHitTriggerSrc(PadView& virt, ImVec2 mouse);
     void onVirtArrowHit(PadView& phys, PadView& virt, int virtComp, const std::string& dir);
+    void onVirtHitAxisAction(PadView& phys, PadView& virt, ImVec2 mouse);
 };

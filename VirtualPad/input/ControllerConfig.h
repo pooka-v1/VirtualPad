@@ -13,13 +13,11 @@ inline bool isStickSlotDir(const std::string& s) {
            s == "right_x_pos" || s == "right_x_neg" ||
            s == "right_y_pos" || s == "right_y_neg";
 }
-enum class HalfAxisActionType { Analog, VirtualButton, Dpad, Macro, Keyboard, Mouse };
 
 struct ButtonAction {
     ButtonActionType     type      = ButtonActionType::VirtualButton;
     std::string          name;        // virtual button ("a","b",...), bot/macro name
-    std::string          physical;    // nombre del botón en el mando físico ("a","l4","rp"...)
-                                     // independiente de la acción — nunca sobreescrito por perfiles
+    std::string          physical;    // physical button id ("a","l4","rp"...) — never overwritten by profiles
     std::string          axis;        // trigger only: WinMM source ("dwUpos", "dwVpos")
     std::string          target;      // trigger only: "l2" or "r2"
     std::string          execution;   // macro only: compact execution string
@@ -27,23 +25,44 @@ struct ButtonAction {
     std::string          mouseButton; // mouse_click only: "left","right","middle"
 };
 
-// One action bound to a single half-axis direction ("source_pos" / "source_neg").
-// The key stored in ControllerConfig::axis_actions is "<axis_source>_pos" or "<axis_source>_neg".
+// One action bound to a specific range of a physical trigger's value.
+struct TriggerRange {
+    float        from      = 0.0f;  // inclusive lower bound [0, 1]
+    float        to        = 1.0f;  // inclusive upper bound [0, 1]
+    ButtonAction action;
+    bool         hasAction = false; // true only if an action was explicitly set
+};
+
+enum class HalfAxisActionType {
+    VirtualButton,  // { "virtual": "a" }           — standard button
+    Dpad,           // { "virtual": "dpad_up" }      — dpad direction
+    Trigger,        // { "virtual": "l2"/"r2" }      — virtual trigger
+    StickSlot,      // { "virtual": "left_x_pos" }   — stick half-axis slot
+    Analog,         // { "type": "analog" }           — proportional stick-to-stick (legacy)
+    Keyboard,       // { "type": "keyboard" }
+    Macro,          // { "type": "macro" }
+    MouseClick,     // { "type": "mouse_click" }      — digital mouse button
+    MouseMove,      // { "target": "mouse_x|mouse_y" } — proportional mouse movement
+    Ranges          // { "ranges": [...] }             — ranged actions
+};
+
+// One action bound to a single half-axis direction.
+// Key in ControllerConfig::axis_actions: "<virtual_axis>_pos" or "<virtual_axis>_neg"
+// e.g. "left_x_pos", "right_y_neg"
 struct HalfAxisAction {
-    HalfAxisActionType   type        = HalfAxisActionType::Analog;
-    // Analog:        target stick axis  "left_x"|"left_y"|"right_x"|"right_y"
-    // VirtualButton: button name        "a"|"b"|"x"|"y"|"l1"|"r1"|"select"|"start"|"home"|"l3"|"r3"|"l4"|"r4"|"lp"|"rp"
-    // Dpad:          direction          "up"|"down"|"left"|"right"
-    // Macro:         macro name         (target field)
-    // Keyboard:      unused             (keys field holds combo)
-    // Mouse:         unused             (mouseButton field)
+    HalfAxisActionType   type       = HalfAxisActionType::VirtualButton;
+    // target: button name (VirtualButton), dpad direction (Dpad), slot name (StickSlot),
+    //         trigger name (Trigger), virtual axis (Analog), mouse axis (MouseMove),
+    //         macro name (Macro)
     std::string          target;
-    std::string          outDir;     // Analog only: "pos"|"neg" — which virtual half to drive
-    float                threshold  = 0.5f;   // digital targets: activation threshold
-    float                scale      = 1.0f;   // Analog: output multiplier (1.0 = proportional 1:1)
-    std::vector<std::string> keys;             // Keyboard only
-    std::string          mouseButton;          // Mouse only: "left"|"right"|"middle"
-    std::string          execution;            // Macro only: optional compact execution string
+    std::string          outDir;    // Analog: "pos"|"neg" — which virtual half to drive
+    float                threshold = 0.5f;   // digital: activation threshold
+    float                scale     = 1.0f;   // Analog: output multiplier
+    float                speed     = 15.0f;  // MouseMove: pixels per tick at full deflection
+    std::vector<std::string> keys;           // Keyboard
+    std::string          mouseButton;        // MouseClick: "left"|"right"|"middle"
+    std::string          execution;          // Macro: compact execution string
+    std::vector<TriggerRange> ranges;        // Ranges
 };
 
 struct AxisMapping {
@@ -70,14 +89,6 @@ struct ImuConfig {
     float gyroScale   = 1.0f / 32768.0f;  // int16 raw → normalized [-1..1]
 };
 
-// One action bound to a specific range of a physical trigger's value.
-struct TriggerRange {
-    float        from      = 0.0f;  // inclusive lower bound [0, 1]
-    float        to        = 1.0f;  // inclusive upper bound [0, 1]
-    ButtonAction action;
-    bool         hasAction = false; // true only if an action was explicitly set
-};
-
 struct ControllerConfig {
     uint16_t    vid = 0;
     uint16_t    pid = 0;
@@ -87,7 +98,7 @@ struct ControllerConfig {
 
     std::unordered_map<int, ButtonAction>           buttons;       // physical bit (1-indexed) -> action
     std::unordered_map<std::string, AxisMapping>    axes;          // WinMM/HID source name -> whole-axis mapping
-    std::unordered_map<std::string, HalfAxisAction> axis_actions;  // "source_pos"/"source_neg" -> per-direction action
+    std::unordered_map<std::string, HalfAxisAction> axis_actions;  // "left_x_pos"/"right_y_neg"/... -> per-direction action
     std::unordered_map<std::string, std::string>    dpadRemap;     // "up"/"down"/"left"/"right" -> virtual short name
     std::unordered_map<std::string, ButtonAction>   dpadActions;   // "up"/"down"/"left"/"right" -> keyboard/mouse/macro action
     std::string    dpad;

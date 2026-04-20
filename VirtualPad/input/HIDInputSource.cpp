@@ -237,25 +237,27 @@ bool HIDInputSource::read(GamepadState& state) {
         //   [0..8]: 0=N, 1=NE ... 7=NW, 8=center  (e.g. Pro 2 D-mode)
         //   [1..8]: 1=N, 2=NE ... 8=NW, center=0  (e.g. Pro 3 X-mode)
         // Values inside [logMin..logMax] are directions; outside = neutral.
+        bool hatUp = false, hatDown = false, hatLeft = false, hatRight = false;
         auto hatCapIt = m_valueCaps.find(kUsageHat);
         if (hatCapIt != m_valueCaps.end()) {
             ULONG hatMin = static_cast<ULONG>(hatCapIt->second.logMin);
             ULONG hatMax = static_cast<ULONG>(hatCapIt->second.logMax);
-            if (hatValue < hatMin || hatValue > hatMax) {
-                state.dpadUp = state.dpadDown = state.dpadLeft = state.dpadRight = false;
-            } else {
-                parseHIDDpad(hatValue - hatMin, state.dpadUp, state.dpadDown, state.dpadLeft, state.dpadRight);
-            }
+            if (hatValue >= hatMin && hatValue <= hatMax)
+                parseHIDDpad(hatValue - hatMin, hatUp, hatDown, hatLeft, hatRight);
         } else {
-            parseHIDDpad(hatValue, state.dpadUp, state.dpadDown, state.dpadLeft, state.dpadRight);
+            parseHIDDpad(hatValue, hatUp, hatDown, hatLeft, hatRight);
         }
+        // Physical display shows raw hat state only
+        m_physicalState.dpadUp    = hatUp;
+        m_physicalState.dpadDown  = hatDown;
+        m_physicalState.dpadLeft  = hatLeft;
+        m_physicalState.dpadRight = hatRight;
+        // OR into virtual state so axis_actions Dpad assignments aren't overwritten
+        state.dpadUp    |= hatUp;
+        state.dpadDown  |= hatDown;
+        state.dpadLeft  |= hatLeft;
+        state.dpadRight |= hatRight;
     }
-
-    // Copy physical dpad directions (hat switch only — before button remapping)
-    m_physicalState.dpadUp    = state.dpadUp;
-    m_physicalState.dpadDown  = state.dpadDown;
-    m_physicalState.dpadLeft  = state.dpadLeft;
-    m_physicalState.dpadRight = state.dpadRight;
 
     // Apply dpad remapping: snapshot active directions, then map each to its virtual target
     if (!m_config.dpadRemap.empty()) {
@@ -420,6 +422,8 @@ void HIDInputSource::applyButtons(PCHAR buf, ULONG bufLen, GamepadState& state) 
     state.btnLP = state.btnRP = state.btnTouch = false;
     // Triggers also reset each frame so button-mapped triggers clear when released
     state.triggerL = state.triggerR = 0.0f;
+    // Dpad bits reset so axis_actions Dpad assignments clear when stick returns to neutral
+    state.dpadUp = state.dpadDown = state.dpadLeft = state.dpadRight = false;
 
     // Buttons whose physical identity is a stick slot source lose their virtual
     // action entirely (one input → one output). Checked against action.physical
@@ -577,7 +581,6 @@ void HIDInputSource::applyAxes(PCHAR buf, ULONG bufLen, GamepadState& state) {
         float v = normalizeHIDAxis(au.usage, rawValue);
         if (mapping.invert) v = -v;
 
-        // Check positive half-axis action
         auto processHalf = [&](const std::string& key, float halfV) {
             auto ait = m_config.axis_actions.find(key);
             if (ait == m_config.axis_actions.end()) return;
@@ -586,7 +589,6 @@ void HIDInputSource::applyAxes(PCHAR buf, ULONG bufLen, GamepadState& state) {
 
             switch (ha.type) {
             case HalfAxisActionType::Analog: {
-                // Proportional: drive the target virtual half-axis with absV * scale
                 float outV = absV * ha.scale;
                 if (ha.outDir == "neg") outV = -outV;
                 if      (ha.target == "left_x")  state.leftX  = outV;
@@ -606,18 +608,62 @@ void HIDInputSource::applyAxes(PCHAR buf, ULONG bufLen, GamepadState& state) {
                     else if (ha.target == "right") state.dpadRight = true;
                 }
                 break;
+            case HalfAxisActionType::Trigger:
+                if (absV > ha.threshold) {
+                    if      (ha.target == "l2" || ha.target == "trigger_l") state.triggerL = 1.0f;
+                    else if (ha.target == "r2" || ha.target == "trigger_r") state.triggerR = 1.0f;
+                }
+                break;
+            case HalfAxisActionType::StickSlot:
+                if (absV > ha.threshold) {
+                    if      (ha.target == "left_x_pos")  state.leftX  =  1.0f;
+                    else if (ha.target == "left_x_neg")  state.leftX  = -1.0f;
+                    else if (ha.target == "left_y_pos")  state.leftY  =  1.0f;
+                    else if (ha.target == "left_y_neg")  state.leftY  = -1.0f;
+                    else if (ha.target == "right_x_pos") state.rightX =  1.0f;
+                    else if (ha.target == "right_x_neg") state.rightX = -1.0f;
+                    else if (ha.target == "right_y_pos") state.rightY =  1.0f;
+                    else if (ha.target == "right_y_neg") state.rightY = -1.0f;
+                }
+                break;
+            case HalfAxisActionType::MouseMove:
+                if      (ha.target == "mouse_x") state.mouseX += absV;
+                else if (ha.target == "mouse_y") state.mouseY += absV;
+                break;
+            case HalfAxisActionType::Ranges:
+                for (const auto& r : ha.ranges) {
+                    if (absV < r.from || absV > r.to || !r.hasAction) continue;
+                    switch (r.action.type) {
+                    case ButtonActionType::VirtualButton: setBtn(r.action.name, true); break;
+                    case ButtonActionType::Keyboard:
+                    case ButtonActionType::MouseClick:
+                    case ButtonActionType::Macro:
+                        m_activeAxisActions.push_back(key); break;
+                    default: break;
+                    }
+                    break;
+                }
+                break;
             case HalfAxisActionType::Macro:
             case HalfAxisActionType::Keyboard:
-            case HalfAxisActionType::Mouse:
-                // Handled in PadEngine via getActiveAxisActions()
+            case HalfAxisActionType::MouseClick:
                 if (absV > ha.threshold)
                     m_activeAxisActions.push_back(key);
                 break;
             }
+            // Suppress raw axis contribution for this half when redirected to a non-analog target.
+            // Mirrors btn_dir: when a half-axis is repurposed it stops feeding the virtual stick.
+            if (ha.type != HalfAxisActionType::Analog && ha.type != HalfAxisActionType::Ranges) {
+                if      (mapping.target == "left_x")  state.leftX  = (halfV < 0.0f) ? (state.leftX  > 0.0f ? state.leftX  : 0.0f) : (state.leftX  < 0.0f ? state.leftX  : 0.0f);
+                else if (mapping.target == "left_y")  state.leftY  = (halfV < 0.0f) ? (state.leftY  > 0.0f ? state.leftY  : 0.0f) : (state.leftY  < 0.0f ? state.leftY  : 0.0f);
+                else if (mapping.target == "right_x") state.rightX = (halfV < 0.0f) ? (state.rightX > 0.0f ? state.rightX : 0.0f) : (state.rightX < 0.0f ? state.rightX : 0.0f);
+                else if (mapping.target == "right_y") state.rightY = (halfV < 0.0f) ? (state.rightY > 0.0f ? state.rightY : 0.0f) : (state.rightY < 0.0f ? state.rightY : 0.0f);
+            }
         };
 
-        if (v >= 0.0f) processHalf(source + "_pos", v);
-        else           processHalf(source + "_neg", v);
+        // Key uses virtual axis name (mapping.target) so JSON entries match: "left_x_pos" etc.
+        if (v >= 0.0f) processHalf(mapping.target + "_pos", v);
+        else           processHalf(mapping.target + "_neg", v);
     }
 }
 

@@ -671,8 +671,8 @@ void PadEngine::threadFunc() {
                 if (action.type == ButtonActionType::MouseClick) dpadMousePrev[dir] = false;
             }
             for (const auto& [key, action] : cfg->axis_actions) {
-                if (action.type == HalfAxisActionType::Keyboard) axisKbPrev[key]    = false;
-                if (action.type == HalfAxisActionType::Mouse)    axisMousePrev[key] = false;
+                if (action.type == HalfAxisActionType::Keyboard)   axisKbPrev[key]    = false;
+                if (action.type == HalfAxisActionType::MouseClick) axisMousePrev[key] = false;
             }
             lightningBotBit = findBotBit(*cfg, "LightningBot");
             if (lightningBotBit > 0)

@@ -10,7 +10,7 @@
 // Defined here (not inside MappingSelection) so AppWindow can use it for
 // the rangos modal state without prefixing.
 // ---------------------------------------------------------------------------
-enum class H5ActionType { Xbox, Analog, Macro, Keyboard, Mouse };
+enum class H5ActionType { Xbox, Analog, Macro, Keyboard, Mouse, MouseMove };
 
 // ---------------------------------------------------------------------------
 // MappingSelection — all transient UI selection and interaction state for the
@@ -46,6 +46,10 @@ struct MappingSelection {
     std::vector<std::pair<std::string, std::string>> captureKeys; // {json_name, display}
     std::string  macroSel;
 
+    // --- Axis-action MouseMove state ---
+    float       axisMouseSpeed  = 15.0f;
+    std::string axisMouseAxis   = "mouse_x";
+
     // --- H9 hardware-mapping hold state ---
     int         h9HoldComp      = -1;
     std::string h9HoldStickDir;
@@ -79,5 +83,7 @@ struct MappingSelection {
         h9PrevPhysState = {};
         h9HoldTriggerSrc.clear();
         h9HoldTriggerTimer = 0.0f;
+        axisMouseSpeed = 15.0f;
+        axisMouseAxis  = "mouse_x";
     }
 };

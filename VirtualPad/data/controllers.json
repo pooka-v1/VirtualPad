@@ -209,6 +209,32 @@
           "target": "right_x"
         }
       },
+      "axis_actions": {
+        "left_x_neg": {
+          "virtual": "dpad_left"
+        },
+        "left_x_pos": {
+          "virtual": "dpad_right"
+        },
+        "left_y_neg": {
+          "virtual": "dpad_down"
+        },
+        "left_y_pos": {
+          "virtual": "dpad_up"
+        },
+        "right_x_neg": {
+          "virtual": "x"
+        },
+        "right_x_pos": {
+          "virtual": "b"
+        },
+        "right_y_neg": {
+          "virtual": "a"
+        },
+        "right_y_pos": {
+          "virtual": "y"
+        }
+      },
       "buttons": {
         "1": {
           "physical": "a",
@@ -274,36 +300,8 @@
       "source_name": "8BitDo Pro 2 (D-mode)",
       "trigger_actions": {
         "l2": {
-          "ranges": [
-            {
-              "action": {
-                "virtual": "left_y_pos"
-              },
-              "from": 0.10000000149011612,
-              "to": 0.32499998807907104
-            },
-            {
-              "action": {
-                "virtual": "left_y_neg"
-              },
-              "from": 0.32499998807907104,
-              "to": 0.550000011920929
-            },
-            {
-              "action": {
-                "virtual": "left_x_pos"
-              },
-              "from": 0.550000011920929,
-              "to": 0.7749999761581421
-            },
-            {
-              "action": {
-                "virtual": "left_x_neg"
-              },
-              "from": 0.7749999761581421,
-              "to": 1.0
-            }
-          ]
+          "target": "l2",
+          "type": "trigger_passthrough"
         }
       },
       "vid": "2DC8"

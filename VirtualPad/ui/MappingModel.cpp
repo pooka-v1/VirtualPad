@@ -77,6 +77,10 @@ void MappingModel::reload(const std::vector<ControllerConfig>& configs) {
         };
         loadRanges(cfg.triggerLRanges, trigLRangeEdits);
         loadRanges(cfg.triggerRRanges, trigRRangeEdits);
+
+        for (const auto& [key, action] : cfg.axis_actions)
+            axisActionEdits[key] = action;
+
         // stickSlotEdits reserved for future inverse case (analog stick → virtual component).
         // Button-sourced slot assignments are loaded via buttonEdits (VirtualButton case above).
         break;
@@ -291,6 +295,89 @@ void MappingModel::save(const std::string& path) {
         // stick_slots section reserved for future inverse case (analog stick → virtual component).
         // Button-sourced slot assignments are saved as "virtual": "right_x_neg" in button entries.
         ctrl.erase("stick_slots");
+
+        // --- axis_actions (H6 T4) ---
+        {
+            auto halfAxisToJson = [](const HalfAxisAction& ha) -> json {
+                json j;
+                switch (ha.type) {
+                case HalfAxisActionType::VirtualButton:
+                case HalfAxisActionType::Trigger:
+                case HalfAxisActionType::StickSlot:
+                    j["virtual"] = ha.target;
+                    break;
+                case HalfAxisActionType::Dpad:
+                    j["virtual"] = "dpad_" + ha.target;
+                    break;
+                case HalfAxisActionType::Keyboard: {
+                    j["type"] = "keyboard";
+                    json arr = json::array();
+                    for (const auto& k : ha.keys) arr.push_back(k);
+                    j["keys"] = arr;
+                    break;
+                }
+                case HalfAxisActionType::Macro:
+                    j["type"] = "macro";
+                    j["name"] = ha.target;
+                    if (!ha.execution.empty()) j["execution"] = ha.execution;
+                    break;
+                case HalfAxisActionType::MouseClick:
+                    j["type"]   = "mouse_click";
+                    j["button"] = ha.mouseButton;
+                    break;
+                case HalfAxisActionType::MouseMove:
+                    j["target"] = ha.target;
+                    j["speed"]  = ha.speed;
+                    break;
+                case HalfAxisActionType::Analog:
+                    j["type"]    = "analog";
+                    j["target"]  = ha.target;
+                    j["out_dir"] = ha.outDir;
+                    j["scale"]   = ha.scale;
+                    break;
+                case HalfAxisActionType::Ranges: {
+                    json arr = json::array();
+                    for (const auto& r : ha.ranges) {
+                        json rj;
+                        rj["from"] = r.from;
+                        rj["to"]   = r.to;
+                        if (r.hasAction) {
+                            json actj;
+                            const ButtonAction& act = r.action;
+                            if (act.type == ButtonActionType::VirtualButton)
+                                actj["virtual"] = act.name;
+                            else if (act.type == ButtonActionType::Keyboard) {
+                                actj["type"] = "keyboard";
+                                json ka = json::array();
+                                for (const auto& k : act.keys) ka.push_back(k);
+                                actj["keys"] = ka;
+                            } else if (act.type == ButtonActionType::MouseClick) {
+                                actj["type"]   = "mouse_click";
+                                actj["button"] = act.mouseButton;
+                            } else if (act.type == ButtonActionType::Macro) {
+                                actj["type"] = "macro";
+                                actj["name"] = act.name;
+                            }
+                            rj["action"] = actj;
+                        }
+                        arr.push_back(rj);
+                    }
+                    j["ranges"] = arr;
+                    break;
+                }
+                }
+                return j;
+            };
+
+            if (!axisActionEdits.empty()) {
+                json aaJson = json::object();
+                for (const auto& [key, ha] : axisActionEdits)
+                    aaJson[key] = halfAxisToJson(ha);
+                ctrl["axis_actions"] = aaJson;
+            } else {
+                ctrl.erase("axis_actions");
+            }
+        }
 
         break;
     }
