@@ -1,5 +1,6 @@
 #pragma once
 #include "../input/ControllerConfig.h"
+#include "../input/ComponentTypes.h"
 #include "../ui/PadLayout.h"
 #include <vector>
 #include <string>
@@ -56,6 +57,12 @@ GameProfile loadGameProfile(const std::string& path);
 // Returns a copy of base with the matching override's buttons applied on top.
 // Axes and dpad are unchanged. If no override matches vid/pid, returns base as-is.
 ControllerConfig applyProfile(const ControllerConfig& base, const GameProfile& profile);
+
+// ── Component System ─────────────────────────────────────────────────────────
+
+// Builds a PhysicalController from one controllers.json entry.
+// Runs in parallel with ControllerConfig — does not affect existing behaviour.
+std::vector<PhysicalController> loadPhysicalControllers(const std::string& path);
 
 // ── Pad layouts ─────────────────────────────────────────────────────────────
 

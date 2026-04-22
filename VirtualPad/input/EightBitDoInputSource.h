@@ -16,16 +16,29 @@ public:
     const char* getName()           const override { return m_config.source_name.c_str(); }
     DWORD       getLastButtonMask() const override { return m_lastButtonMask; }
     void        setConfig(const ControllerConfig& cfg) override { m_config = cfg; }
+    GamepadState getPhysicalState() const override { return m_physicalState; }
     std::vector<std::string> getActiveAxisActions() const override { return m_activeAxisActions; }
+    void        setPhysicalController(const PhysicalController& ctrl) override {
+        m_physicalController    = ctrl;
+        m_hasPhysicalController = true;
+    }
 
 private:
     UINT             m_joyId;
     ControllerConfig m_config;
     DWORD            m_lastButtonMask = 0;
     std::vector<std::string> m_activeAxisActions;
+    GamepadState       m_physicalState;
+    PhysicalController m_physicalController;
+    bool               m_hasPhysicalController = false;
 
     static DWORD getAxisValue(const JOYINFOEX& info, const std::string& source);
     static float normalizeAxis(DWORD value);
     static float normalizeTrigger(DWORD value);
     static void  parsePOV(DWORD pov, bool& up, bool& down, bool& left, bool& right);
+
+    // Component-system path
+    void buildPhysicalButtons(const JOYINFOEX& info);
+    void buildPhysicalAxes   (const JOYINFOEX& info);
+    void applyAxesResidual   (const JOYINFOEX& info, GamepadState& state);
 };

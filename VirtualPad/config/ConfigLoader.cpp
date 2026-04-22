@@ -411,6 +411,374 @@ ControllerConfig applyProfile(const ControllerConfig& base, const GameProfile& p
 }
 
 // ---------------------------------------------------------------------------
+// Component System — PhysicalController
+// ---------------------------------------------------------------------------
+
+static std::optional<ComponentId> physicalNameToComponentId(const std::string& phys) {
+    if (phys == "a")                     return ComponentId::BtnA;
+    if (phys == "b")                     return ComponentId::BtnB;
+    if (phys == "x")                     return ComponentId::BtnX;
+    if (phys == "y")                     return ComponentId::BtnY;
+    if (phys == "l1")                    return ComponentId::BtnLB;
+    if (phys == "r1")                    return ComponentId::BtnRB;
+    if (phys == "l3")                    return ComponentId::BtnL3;
+    if (phys == "r3")                    return ComponentId::BtnR3;
+    if (phys == "select" || phys == "back") return ComponentId::BtnBack;
+    if (phys == "start")                 return ComponentId::BtnStart;
+    if (phys == "home")                  return ComponentId::BtnHome;
+    if (phys == "l4")                    return ComponentId::BtnL4;
+    if (phys == "r4")                    return ComponentId::BtnR4;
+    if (phys == "lp" || phys == "l5")   return ComponentId::BtnLP;
+    if (phys == "rp" || phys == "r5")   return ComponentId::BtnRP;
+    return std::nullopt;
+}
+
+static std::optional<ButtonId> virtualNameToButtonId(const std::string& name) {
+    if (name == "a")                        return ButtonId::A;
+    if (name == "b")                        return ButtonId::B;
+    if (name == "x")                        return ButtonId::X;
+    if (name == "y")                        return ButtonId::Y;
+    if (name == "l1" || name == "lb")       return ButtonId::LB;
+    if (name == "r1" || name == "rb")       return ButtonId::RB;
+    if (name == "l3")                       return ButtonId::L3;
+    if (name == "r3")                       return ButtonId::R3;
+    if (name == "select" || name == "back") return ButtonId::Back;
+    if (name == "start")                    return ButtonId::Start;
+    if (name == "home")                     return ButtonId::Home;
+    return std::nullopt;
+}
+
+static std::optional<StickSlotId> slotStringToStickSlotId(const std::string& s) {
+    if (s == "left_x_pos")  return StickSlotId::LeftXPos;
+    if (s == "left_x_neg")  return StickSlotId::LeftXNeg;
+    if (s == "left_y_pos")  return StickSlotId::LeftYPos;
+    if (s == "left_y_neg")  return StickSlotId::LeftYNeg;
+    if (s == "right_x_pos") return StickSlotId::RightXPos;
+    if (s == "right_x_neg") return StickSlotId::RightXNeg;
+    if (s == "right_y_pos") return StickSlotId::RightYPos;
+    if (s == "right_y_neg") return StickSlotId::RightYNeg;
+    return std::nullopt;
+}
+
+static std::optional<ComponentId> slotStringToComponentId(const std::string& s) {
+    if (s == "left_x_pos")  return ComponentId::LeftXPos;
+    if (s == "left_x_neg")  return ComponentId::LeftXNeg;
+    if (s == "left_y_pos")  return ComponentId::LeftYPos;
+    if (s == "left_y_neg")  return ComponentId::LeftYNeg;
+    if (s == "right_x_pos") return ComponentId::RightXPos;
+    if (s == "right_x_neg") return ComponentId::RightXNeg;
+    if (s == "right_y_pos") return ComponentId::RightYPos;
+    if (s == "right_y_neg") return ComponentId::RightYNeg;
+    return std::nullopt;
+}
+
+static MouseButton stringToMouseButton2(const std::string& s) {
+    if (s == "right")   return MouseButton::Right;
+    if (s == "middle")  return MouseButton::Middle;
+    if (s == "forward") return MouseButton::Forward;
+    if (s == "back")    return MouseButton::Back;
+    return MouseButton::Left;
+}
+
+static MouseAxis stringToMouseAxis(const std::string& s) {
+    return (s == "mouse_y") ? MouseAxis::Y : MouseAxis::X;
+}
+
+// Translates a ButtonAction (existing system) to a VirtualTarget.
+// Returns nullopt when the action has no meaningful virtual output.
+static std::optional<VirtualTarget> buttonActionToVT(const ButtonAction& action) {
+    switch (action.type) {
+        case ButtonActionType::VirtualButton: {
+            if (action.name.empty()) return std::nullopt;
+            if (action.name == "dpad_up")    return VirtualDpadDir{DpadDir::Up};
+            if (action.name == "dpad_down")  return VirtualDpadDir{DpadDir::Down};
+            if (action.name == "dpad_left")  return VirtualDpadDir{DpadDir::Left};
+            if (action.name == "dpad_right") return VirtualDpadDir{DpadDir::Right};
+            if (isStickSlotDir(action.name)) {
+                auto slot = slotStringToStickSlotId(action.name);
+                if (slot) return VirtualStickSlot{*slot};
+            }
+            if (action.name == "l2" || action.name == "trigger_l") return VirtualTrigger{TriggerSide::L};
+            if (action.name == "r2" || action.name == "trigger_r") return VirtualTrigger{TriggerSide::R};
+            auto bid = virtualNameToButtonId(action.name);
+            if (bid) return VirtualButton{*bid};
+            return std::nullopt;
+        }
+        case ButtonActionType::Trigger:
+            if (action.target == "l2") return VirtualTrigger{TriggerSide::L};
+            if (action.target == "r2") return VirtualTrigger{TriggerSide::R};
+            return VirtualPassthrough{};
+        case ButtonActionType::TriggerPassthrough:
+            return VirtualPassthrough{};
+        case ButtonActionType::Bot:
+            return VirtualBot{action.name};
+        case ButtonActionType::Macro:
+            return VirtualMacro{action.name};
+        case ButtonActionType::Keyboard:
+            return VirtualKeyboard{};   // key codes are strings in existing system; left empty, resolved in P3
+        case ButtonActionType::MouseClick:
+            return VirtualMouseClick{stringToMouseButton2(action.mouseButton)};
+    }
+    return std::nullopt;
+}
+
+// Translates a HalfAxisAction (existing system) to a VirtualTarget.
+static std::optional<VirtualTarget> halfAxisActionToVT(const HalfAxisAction& action) {
+    switch (action.type) {
+        case HalfAxisActionType::VirtualButton: {
+            auto bid = virtualNameToButtonId(action.target);
+            if (bid) return VirtualButton{*bid};
+            return std::nullopt;
+        }
+        case HalfAxisActionType::Dpad:
+            if (action.target == "up")    return VirtualDpadDir{DpadDir::Up};
+            if (action.target == "down")  return VirtualDpadDir{DpadDir::Down};
+            if (action.target == "left")  return VirtualDpadDir{DpadDir::Left};
+            if (action.target == "right") return VirtualDpadDir{DpadDir::Right};
+            return std::nullopt;
+        case HalfAxisActionType::Trigger:
+            if (action.target == "l2" || action.target == "trigger_l") return VirtualTrigger{TriggerSide::L};
+            if (action.target == "r2" || action.target == "trigger_r") return VirtualTrigger{TriggerSide::R};
+            return std::nullopt;
+        case HalfAxisActionType::StickSlot: {
+            auto slot = slotStringToStickSlotId(action.target);
+            if (slot) return VirtualStickSlot{*slot};
+            return std::nullopt;
+        }
+        case HalfAxisActionType::Keyboard:
+            return VirtualKeyboard{};
+        case HalfAxisActionType::Macro:
+            return VirtualMacro{action.target};
+        case HalfAxisActionType::MouseClick:
+            return VirtualMouseClick{stringToMouseButton2(action.mouseButton)};
+        case HalfAxisActionType::MouseMove:
+            return VirtualMouseMove{stringToMouseAxis(action.target), action.speed};
+        case HalfAxisActionType::Analog:
+        case HalfAxisActionType::Ranges:
+            return std::nullopt;  // handled by caller
+    }
+    return std::nullopt;
+}
+
+// Builds a RangedHalfAxis from a simple trigger action + optional ranges.
+static RangedHalfAxis buildRangedHalfAxisFromTrigger(const ButtonAction& simple, bool hasAction,
+                                                      const std::vector<TriggerRange>& ranges) {
+    RangedHalfAxis rha;
+    if (!ranges.empty()) {
+        for (const auto& tr : ranges) {
+            if (!tr.hasAction) continue;
+            auto vt = buttonActionToVT(tr.action);
+            if (vt) rha.ranges.push_back({tr.from, tr.to, *vt});
+        }
+    } else if (hasAction) {
+        auto vt = buttonActionToVT(simple);
+        if (vt) rha.ranges.push_back({0.0f, 1.0f, *vt});
+        // empty ranges = implicit VirtualPassthrough
+    }
+    return rha;
+}
+
+// Builds a RangedHalfAxis from a HalfAxisAction (axis_actions).
+static RangedHalfAxis buildRangedHalfAxisFromHalf(const HalfAxisAction& action) {
+    RangedHalfAxis rha;
+    if (action.type == HalfAxisActionType::Ranges) {
+        for (const auto& tr : action.ranges) {
+            if (!tr.hasAction) continue;
+            auto vt = buttonActionToVT(tr.action);
+            if (vt) rha.ranges.push_back({tr.from, tr.to, *vt});
+        }
+    } else {
+        auto vt = halfAxisActionToVT(action);
+        if (vt) rha.ranges.push_back({0.0f, 1.0f, *vt});
+    }
+    return rha;
+}
+
+static PhysicalController parsePhysicalController(const json& c) {
+    PhysicalController ctrl;
+    ctrl.vid  = static_cast<uint16_t>(std::stoul(c.at("vid").get<std::string>(), nullptr, 16));
+    ctrl.pid  = static_cast<uint16_t>(std::stoul(c.at("pid").get<std::string>(), nullptr, 16));
+    ctrl.name = c.value("source_name", "");
+
+    auto setBase = [&](ComponentId id, PhysicalComponent comp) {
+        ctrl.baseLayer[static_cast<size_t>(id)] = std::move(comp);
+    };
+
+    // ── Buttons ──────────────────────────────────────────────────────────────
+    if (c.contains("buttons")) {
+        for (const auto& [key, val] : c["buttons"].items()) {
+            if (!key.empty() && key[0] == '_') continue;
+            ButtonAction action = parseButtonAction(val);
+            if (action.physical.empty()) continue;
+            auto cid = physicalNameToComponentId(action.physical);
+            if (!cid) continue;
+            auto vt = buttonActionToVT(action);
+            if (!vt) continue;   // no virtual output (unbound paddle, etc.)
+            uint8_t bit = static_cast<uint8_t>(std::stoi(key));
+            setBase(*cid, PhysicalButton{bit, *vt});
+        }
+    }
+
+    // ── Dpad ─────────────────────────────────────────────────────────────────
+    // Default: each direction passes through to its natural DpadDir.
+    // Overridden by dpad_remap / dpad_actions entries.
+    if (!c.value("dpad", "").empty()) {
+        static const std::pair<const char*, std::pair<DpadDir, ComponentId>> kDpadDefaults[] = {
+            {"up",    {DpadDir::Up,    ComponentId::DpadUp}},
+            {"down",  {DpadDir::Down,  ComponentId::DpadDown}},
+            {"left",  {DpadDir::Left,  ComponentId::DpadLeft}},
+            {"right", {DpadDir::Right, ComponentId::DpadRight}},
+        };
+        for (auto& [dirStr, dc] : kDpadDefaults)
+            setBase(dc.second, PhysicalDpadDir{dc.first, VirtualPassthrough{}});
+
+        if (c.contains("dpad_remap") && c["dpad_remap"].is_object()) {
+            for (const auto& [dirStr, val] : c["dpad_remap"].items()) {
+                DpadDir ddir; ComponentId cid;
+                if      (dirStr == "up")    { ddir = DpadDir::Up;    cid = ComponentId::DpadUp;    }
+                else if (dirStr == "down")  { ddir = DpadDir::Down;  cid = ComponentId::DpadDown;  }
+                else if (dirStr == "left")  { ddir = DpadDir::Left;  cid = ComponentId::DpadLeft;  }
+                else if (dirStr == "right") { ddir = DpadDir::Right; cid = ComponentId::DpadRight; }
+                else continue;
+
+                if (val.is_string()) {
+                    std::string vtStr = val.get<std::string>();
+                    if (isStickSlotDir(vtStr)) {
+                        auto slot = slotStringToStickSlotId(vtStr);
+                        if (slot) setBase(cid, PhysicalDpadDir{ddir, VirtualStickSlot{*slot}});
+                    } else {
+                        auto bid = virtualNameToButtonId(vtStr);
+                        if (bid) setBase(cid, PhysicalDpadDir{ddir, VirtualButton{*bid}});
+                    }
+                } else if (val.is_object()) {
+                    ButtonAction action = parseButtonAction(val);
+                    auto vt = buttonActionToVT(action);
+                    if (vt) setBase(cid, PhysicalDpadDir{ddir, *vt});
+                }
+            }
+        }
+
+        if (c.contains("dpad_actions") && c["dpad_actions"].is_object()) {
+            for (const auto& [dirStr, val] : c["dpad_actions"].items()) {
+                DpadDir ddir; ComponentId cid;
+                if      (dirStr == "up")    { ddir = DpadDir::Up;    cid = ComponentId::DpadUp;    }
+                else if (dirStr == "down")  { ddir = DpadDir::Down;  cid = ComponentId::DpadDown;  }
+                else if (dirStr == "left")  { ddir = DpadDir::Left;  cid = ComponentId::DpadLeft;  }
+                else if (dirStr == "right") { ddir = DpadDir::Right; cid = ComponentId::DpadRight; }
+                else continue;
+                ButtonAction action = parseButtonAction(val);
+                auto vt = buttonActionToVT(action);
+                if (vt) setBase(cid, PhysicalDpadDir{ddir, *vt});
+            }
+        }
+    }
+
+    // ── Triggers ─────────────────────────────────────────────────────────────
+    if (c.contains("trigger_actions") && c["trigger_actions"].is_object()) {
+        const auto& ta = c["trigger_actions"];
+        auto parseTrig = [&](const char* key, TriggerSide side, ComponentId cid) {
+            if (!ta.contains(key)) return;
+            const auto& t = ta[key];
+            ButtonAction simple;
+            bool hasSimple = false;
+            std::vector<TriggerRange> ranges;
+            if (t.is_object() && t.contains("ranges") && t["ranges"].is_array()) {
+                for (const auto& r : t["ranges"]) {
+                    TriggerRange tr;
+                    tr.from = r.value("from", 0.0f);
+                    tr.to   = r.value("to",   1.0f);
+                    if (r.contains("action")) {
+                        tr.action    = parseButtonAction(r["action"]);
+                        tr.hasAction = true;
+                    }
+                    ranges.push_back(tr);
+                }
+            } else {
+                simple   = parseButtonAction(t);
+                hasSimple = true;
+            }
+            setBase(cid, PhysicalTrigger{side,
+                buildRangedHalfAxisFromTrigger(simple, hasSimple, ranges)});
+        };
+        parseTrig("l2", TriggerSide::L, ComponentId::TriggerL);
+        parseTrig("r2", TriggerSide::R, ComponentId::TriggerR);
+    }
+
+    // ── Axis actions (per-half-axis) ─────────────────────────────────────────
+    if (c.contains("axis_actions") && c["axis_actions"].is_object()) {
+        auto axisMap = parseAxisActionsJson(c["axis_actions"]);
+        for (const auto& [key, action] : axisMap) {
+            auto cid    = slotStringToComponentId(key);
+            auto slotId = slotStringToStickSlotId(key);
+            if (!cid || !slotId) continue;
+            setBase(*cid, PhysicalAnalogDir{*slotId, buildRangedHalfAxisFromHalf(action)});
+        }
+    }
+
+    // ── Whole-axis routing → passthrough components ──────────────────────────
+    // For stick/trigger targets: add VirtualPassthrough half-axis components so
+    // PhysicalController::process() drives them. Skip targets handled by applyAxesResidual
+    // (mouse_x/y, dpad_x/y, trigger_combined, btn_dir) — those stay in the residual path.
+    if (c.contains("axes") && c["axes"].is_object()) {
+        for (const auto& [source, axisJson] : c["axes"].items()) {
+            if (!axisJson.is_object()) continue;
+            std::string target = axisJson.value("target", "");
+
+            auto addAnalogPair = [&](ComponentId pos, ComponentId neg,
+                                     StickSlotId sPos, StickSlotId sNeg) {
+                size_t ip = static_cast<size_t>(pos), in_ = static_cast<size_t>(neg);
+                if (!ctrl.baseLayer[ip]) ctrl.baseLayer[ip] = PhysicalAnalogDir{sPos, {}};
+                if (!ctrl.baseLayer[in_]) ctrl.baseLayer[in_] = PhysicalAnalogDir{sNeg, {}};
+            };
+
+            if      (target == "left_x")  addAnalogPair(ComponentId::LeftXPos,  ComponentId::LeftXNeg,  StickSlotId::LeftXPos,  StickSlotId::LeftXNeg);
+            else if (target == "left_y")  addAnalogPair(ComponentId::LeftYPos,  ComponentId::LeftYNeg,  StickSlotId::LeftYPos,  StickSlotId::LeftYNeg);
+            else if (target == "right_x") addAnalogPair(ComponentId::RightXPos, ComponentId::RightXNeg, StickSlotId::RightXPos, StickSlotId::RightXNeg);
+            else if (target == "right_y") addAnalogPair(ComponentId::RightYPos, ComponentId::RightYNeg, StickSlotId::RightYPos, StickSlotId::RightYNeg);
+            else if (target == "trigger_l") {
+                size_t i = static_cast<size_t>(ComponentId::TriggerL);
+                if (!ctrl.baseLayer[i]) ctrl.baseLayer[i] = PhysicalTrigger{TriggerSide::L, {}};
+            } else if (target == "trigger_r") {
+                size_t i = static_cast<size_t>(ComponentId::TriggerR);
+                if (!ctrl.baseLayer[i]) ctrl.baseLayer[i] = PhysicalTrigger{TriggerSide::R, {}};
+            }
+        }
+    }
+
+    // ── Touchpad ─────────────────────────────────────────────────────────────
+    if (c.contains("touchpad")) {
+        const auto& tp = c["touchpad"];
+        TouchpadConfig tpc;
+        tpc.enabled      = tp.value("enabled",       false);
+        tpc.dataOffset   = tp.value("data_offset",   34);
+        tpc.maxX         = tp.value("max_x",         1919);
+        tpc.maxY         = tp.value("max_y",         942);
+        tpc.mouseEnabled = tp.value("mouse_enabled", false);
+        setBase(ComponentId::Touchpad, PhysicalTouchpad{tpc});
+    }
+
+    // ── Gyro ─────────────────────────────────────────────────────────────────
+    if (c.contains("imu") && c["imu"].value("enabled", false))
+        setBase(ComponentId::Gyro, PhysicalGyro{});
+
+    return ctrl;
+}
+
+std::vector<PhysicalController> loadPhysicalControllers(const std::string& path) {
+    std::ifstream f(path);
+    if (!f.is_open())
+        throw std::runtime_error("Cannot open config file: " + path);
+
+    json root = json::parse(f);
+    std::vector<PhysicalController> result;
+    for (const auto& c : root.at("controllers")) {
+        if (c.contains("_") || c.value("source_name", "").empty()) continue;
+        result.push_back(parsePhysicalController(c));
+    }
+    return result;
+}
+
+// ---------------------------------------------------------------------------
 // Pad layouts
 // ---------------------------------------------------------------------------
 

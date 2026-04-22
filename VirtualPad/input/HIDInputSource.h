@@ -1,6 +1,7 @@
 #pragma once
 #include "IInputSource.h"
 #include "ControllerConfig.h"
+#include "ComponentTypes.h"
 #include <windows.h>
 #include <vector>
 #include <string>
@@ -24,6 +25,10 @@ public:
     void        setConfig(const ControllerConfig& cfg) override { m_config = cfg; }
     GamepadState getPhysicalState()   const override { return m_physicalState; }
     std::vector<std::string> getActiveAxisActions() const override { return m_activeAxisActions; }
+    void        setPhysicalController(const PhysicalController& ctrl) override {
+        m_physicalController    = ctrl;
+        m_hasPhysicalController = true;
+    }
 
 private:
     HANDLE           m_device         = INVALID_HANDLE_VALUE;
@@ -43,6 +48,8 @@ private:
     bool             m_lastTouchActive = false;
     GamepadState             m_physicalState;      // physical display state (pre-remapping)
     std::vector<std::string> m_activeAxisActions;  // axis_action keys active this frame (for PadEngine edge detection)
+    PhysicalController       m_physicalController;
+    bool                     m_hasPhysicalController = false;
 
     struct ValueRange { LONG logMin; LONG logMax; USHORT bitSize; };
     std::unordered_map<USHORT, ValueRange> m_valueCaps; // HID usage → logical range
@@ -56,4 +63,9 @@ private:
     void          applyAxes    (PCHAR buf, ULONG bufLen,    GamepadState& state);
     void          applyTouchpad(PCHAR buf, ULONG bytesRead, GamepadState& state);
     void          applyIMU     (PCHAR buf, ULONG bytesRead, GamepadState& state);
+
+    // Component-system path (new, replaces applyButtons + applyAxes when m_hasPhysicalController)
+    void          buildPhysicalButtons (PCHAR buf, ULONG bufLen);
+    void          buildPhysicalAxes    (PCHAR buf, ULONG bufLen);
+    void          applyAxesResidual    (PCHAR buf, ULONG bufLen, GamepadState& state);
 };

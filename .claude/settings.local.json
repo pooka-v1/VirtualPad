@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls *.sln)",
+      "Bash(ls VirtualPad/*.sln)",
+      "Bash(find . -name \"*.sln\" -maxdepth 3)"
+    ]
+  }
+}

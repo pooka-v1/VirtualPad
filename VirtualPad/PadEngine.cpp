@@ -1,6 +1,7 @@
 #include "PadEngine.h"
 #include "Log.h"
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <windows.h>
@@ -396,9 +397,11 @@ void PadEngine::threadFunc() {
     m_hidHide.addSelfToWhitelist();
 
     // --- One-time init: configs (shared with monitor thread) ---
-    std::vector<ControllerConfig> configs;
+    std::vector<ControllerConfig>    configs;
+    std::vector<PhysicalController>  physCtrls;
     try {
-        configs = loadControllerConfigs("data/controllers.json");
+        configs   = loadControllerConfigs("data/controllers.json");
+        physCtrls = loadPhysicalControllers("data/controllers.json");
         { std::lock_guard<std::mutex> lock(m_mutex); m_configs = configs; }
     } catch (const std::exception& ex) {
         spdlog::error("Error loading config: {}", ex.what());
@@ -595,6 +598,18 @@ void PadEngine::threadFunc() {
             input = std::make_unique<HIDInputSource>(selected.hidPath, *cfg);
         else
             input = std::make_unique<EightBitDoInputSource>(selected.port, *cfg);
+
+        // Inject PhysicalController for component-system processing (P4)
+        {
+            auto it = std::find_if(physCtrls.begin(), physCtrls.end(),
+                [&](const PhysicalController& pc) {
+                    return pc.vid == selected.vid && pc.pid == selected.pid;
+                });
+            if (it != physCtrls.end()) {
+                input->setPhysicalController(*it);
+                spdlog::info("PhysicalController injected for {:04X}:{:04X}", selected.vid, selected.pid);
+            }
+        }
 
         if (!input->isConnected()) {
             spdlog::error("Failed to open input device — rescanning.");
@@ -858,6 +873,19 @@ void PadEngine::threadFunc() {
                 }
                 input->setConfig(*cfg);  // push updated button map to active input source
                 initMacros();            // re-init KB/mouse edge state + re-parse macros
+
+                // Re-inject PhysicalController so the component system picks up mapping changes.
+                try {
+                    physCtrls = loadPhysicalControllers("data/controllers.json");
+                    auto it = std::find_if(physCtrls.begin(), physCtrls.end(),
+                        [&](const PhysicalController& pc) {
+                            return pc.vid == selected.vid && pc.pid == selected.pid;
+                        });
+                    if (it != physCtrls.end())
+                        input->setPhysicalController(*it);
+                } catch (const std::exception& ex) {
+                    spdlog::warn("PhysicalController hot-reload failed: {}", ex.what());
+                }
             }
         }
 

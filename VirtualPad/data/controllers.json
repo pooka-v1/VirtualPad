@@ -164,11 +164,23 @@
         }
       },
       "buttons": {
-        "1": "a",
+        "1": {
+          "physical": "a",
+          "virtual": "a"
+        },
         "10": "r3",
-        "2": "b",
-        "3": "x",
-        "4": "y",
+        "2": {
+          "physical": "b",
+          "virtual": "b"
+        },
+        "3": {
+          "physical": "x",
+          "virtual": "x"
+        },
+        "4": {
+          "physical": "y",
+          "virtual": "y"
+        },
         "5": "l1",
         "6": "r1",
         "7": "select",
@@ -209,36 +221,10 @@
           "target": "right_x"
         }
       },
-      "axis_actions": {
-        "left_x_neg": {
-          "virtual": "dpad_left"
-        },
-        "left_x_pos": {
-          "virtual": "dpad_right"
-        },
-        "left_y_neg": {
-          "virtual": "dpad_down"
-        },
-        "left_y_pos": {
-          "virtual": "dpad_up"
-        },
-        "right_x_neg": {
-          "virtual": "x"
-        },
-        "right_x_pos": {
-          "virtual": "b"
-        },
-        "right_y_neg": {
-          "virtual": "a"
-        },
-        "right_y_pos": {
-          "virtual": "y"
-        }
-      },
       "buttons": {
         "1": {
           "physical": "a",
-          "virtual": "b"
+          "virtual": "dpad_right"
         },
         "11": {
           "physical": "select",
@@ -262,18 +248,18 @@
         },
         "2": {
           "physical": "b",
-          "virtual": "a"
+          "virtual": "dpad_down"
         },
         "3": {
           "physical": "rp"
         },
         "4": {
           "physical": "x",
-          "virtual": "y"
+          "virtual": "dpad_up"
         },
         "5": {
           "physical": "y",
-          "virtual": "x"
+          "virtual": "dpad_left"
         },
         "6": {
           "physical": "lp"
@@ -289,10 +275,10 @@
       },
       "dpad": "hid_hat",
       "dpad_remap": {
-        "down": "dpad_down",
-        "left": "dpad_left",
-        "right": "dpad_right",
-        "up": "dpad_up"
+        "down": "a",
+        "left": "x",
+        "right": "b",
+        "up": "y"
       },
       "layout_id": "pro2_ps",
       "mode": "hid",

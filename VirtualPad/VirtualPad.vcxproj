@@ -139,6 +139,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="config\ConfigLoader.cpp" />
+    <ClCompile Include="input\ComponentTypes.cpp" />
     <ClCompile Include="input\EightBitDoInputSource.cpp" />
     <ClCompile Include="input\HIDScanner.cpp" />
     <ClCompile Include="input\HIDInputSource.cpp" />

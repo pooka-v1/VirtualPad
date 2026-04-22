@@ -5,6 +5,7 @@
 #include <string>
 #include "../GamepadState.h"
 #include "ControllerConfig.h"
+#include "ComponentTypes.h"
 
 // Pure abstract interface that every input source must implement.
 //
@@ -33,6 +34,9 @@ public:
     // Replaces the button/axis mapping config without reopening the device.
     // Called when the user switches game profiles at runtime.
     virtual void setConfig(const ControllerConfig& cfg) = 0;
+
+    // Injects the component-system controller model. Default no-op for sources not yet migrated.
+    virtual void setPhysicalController(const PhysicalController& ctrl) {}
 
     // Returns the physical button state (action.physical names) from the last read().
     // Used by the UI to display the physical pad independently of the virtual remapping.
