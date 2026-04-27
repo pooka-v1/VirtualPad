@@ -595,9 +595,14 @@ void HIDInputSource::applyAxes(PCHAR buf, ULONG bufLen, GamepadState& state) {
     }
 
     // ── axis_actions: per-direction half-axis processing ─────────────────────
+    // !! LEGACY PATH — DEPRECATED !!
+    // Used only when m_hasPhysicalController == false (controllers not yet migrated to P4/P5).
+    // The Component System path (checkHalf, below) supersedes this entirely.
+    // Remove this block when P6 is implemented and all controllers are migrated.
     // For each axis that has entries in axis_actions, process positive and negative halves.
     // This runs after whole-axis processing so both can coexist during transition.
     m_activeAxisActions.clear();
+    m_activeAxisRangeActions.clear();
     for (const auto& [source, mapping] : m_config.axes) {
         if (m_config.axis_actions.empty()) break;  // fast path: nothing to do
 
@@ -641,8 +646,8 @@ void HIDInputSource::applyAxes(PCHAR buf, ULONG bufLen, GamepadState& state) {
                 break;
             case HalfAxisActionType::Trigger:
                 if (absV > ha.threshold) {
-                    if      (ha.target == "l2" || ha.target == "trigger_l") state.triggerL = 1.0f;
-                    else if (ha.target == "r2" || ha.target == "trigger_r") state.triggerR = 1.0f;
+                    if      (ha.target == "l2" || ha.target == "trigger_l") state.triggerL = absV;
+                    else if (ha.target == "r2" || ha.target == "trigger_r") state.triggerR = absV;
                 }
                 break;
             case HalfAxisActionType::StickSlot:
@@ -669,7 +674,8 @@ void HIDInputSource::applyAxes(PCHAR buf, ULONG bufLen, GamepadState& state) {
                     case ButtonActionType::Keyboard:
                     case ButtonActionType::MouseClick:
                     case ButtonActionType::Macro:
-                        m_activeAxisActions.push_back(key); break;
+                        m_activeAxisRangeActions[key] = r.action;
+                        break;
                     default: break;
                     }
                     break;
@@ -818,6 +824,7 @@ void HIDInputSource::applyAxesResidual(PCHAR buf, ULONG bufLen, GamepadState& st
     };
 
     m_activeAxisActions.clear();
+    m_activeAxisRangeActions.clear();
     for (const auto& [source, mapping] : m_config.axes) {
         AxisUsage au = usageFromAxisName(source);
         if (au.usage == 0) continue;
@@ -885,7 +892,7 @@ void HIDInputSource::applyAxesResidual(PCHAR buf, ULONG bufLen, GamepadState& st
                         if (r.action.type == ButtonActionType::Keyboard   ||
                             r.action.type == ButtonActionType::MouseClick  ||
                             r.action.type == ButtonActionType::Macro)
-                            m_activeAxisActions.push_back(key);
+                            m_activeAxisRangeActions[key] = r.action;
                         break;
                     }
                     break;

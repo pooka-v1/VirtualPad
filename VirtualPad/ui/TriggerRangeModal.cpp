@@ -9,7 +9,7 @@ using json = nlohmann::json;
 
 // ---------------------------------------------------------------------------
 void TriggerRangeModal::open(const std::string& trigger, const std::vector<RangeEdit>& current) {
-    m_forTrigger = trigger;
+    m_forKey = trigger;
     m_work       = current;
     m_selSect    = -1;
     m_actType    = H5ActionType::Xbox;
@@ -49,10 +49,8 @@ bool TriggerRangeModal::render() {
     };
     static const int kNChoices = 23;
 
-    const char* hdr = (m_forTrigger == "l2")
-        ? "L2  \xe2\x86\x92  Zonas de recorrido"
-        : "R2  \xe2\x86\x92  Zonas de recorrido";
-    ImGui::TextColored({ 1.0f, 0.86f, 0.0f, 1.0f }, "%s", hdr);
+    std::string hdrStr = m_forKey + "  \xe2\x86\x92  Zonas de recorrido";
+    ImGui::TextColored({ 1.0f, 0.86f, 0.0f, 1.0f }, "%s", hdrStr.c_str());
     ImGui::Spacing();
 
     // ── Barra visual de rangos ────────────────────────────────────────────────

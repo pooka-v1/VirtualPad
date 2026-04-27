@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <vector>
 #include <string>
+#include <unordered_map>
 #include "../GamepadState.h"
 #include "ControllerConfig.h"
 #include "ComponentTypes.h"
@@ -45,4 +46,12 @@ public:
     // Returns the axis_action keys that are currently active (threshold exceeded) after the
     // last read(). Used by PadEngine for Macro/Keyboard/Mouse edge-detection on axis directions.
     virtual std::vector<std::string> getActiveAxisActions() const { return {}; }
+
+    // Returns the active ButtonAction for axis_action keys whose type is Ranges.
+    // Maps axis key → the range's action that is currently firing (Keyboard/MouseClick/Macro).
+    // Empty for keys not of Ranges type or when no range is active this frame.
+    virtual const std::unordered_map<std::string, ButtonAction>& getActiveAxisRangeActions() const {
+        static const std::unordered_map<std::string, ButtonAction> empty;
+        return empty;
+    }
 };

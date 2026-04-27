@@ -300,6 +300,33 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
             // Physical L2/R2 → asignar componente seleccionado como gatillo virtual
             {
                 constexpr float kTrigThresh = 0.5f;
+                auto doAxisTrigAssign = [&](const std::string& trigTarget, const std::string& trigState) {
+                    auto [xId9, yId9] = stickIdsFromStateX(selComp2.stateX);
+                    std::string axisKey9;
+                    if      (m_sel.stickDir == "up")    axisKey9 = yId9 + "_pos";
+                    else if (m_sel.stickDir == "down")  axisKey9 = yId9 + "_neg";
+                    else if (m_sel.stickDir == "right") axisKey9 = xId9 + "_pos";
+                    else if (m_sel.stickDir == "left")  axisKey9 = xId9 + "_neg";
+                    if (axisKey9.empty()) return;
+                    HalfAxisAction ha9;
+                    ha9.type = HalfAxisActionType::Trigger;
+                    ha9.target = trigTarget;
+                    auto it9 = m_model.axisActionEdits.find(axisKey9);
+                    bool already9 = (it9 != m_model.axisActionEdits.end() &&
+                                     it9->second.type == ha9.type &&
+                                     it9->second.target == ha9.target);
+                    if (already9) {
+                        m_model.axisActionEdits.erase(axisKey9);
+                        m_sel.flashComp = -1; m_sel.flashTimer = 0.0f; m_sel.flashVirtShort.clear();
+                    } else {
+                        m_model.axisActionEdits[axisKey9] = ha9;
+                        m_sel.flashComp      = findCompByState(virt.getLayout(), trigState);
+                        m_sel.flashTimer     = 0.5f;
+                        m_sel.flashVirtShort = trigState;
+                    }
+                    m_sel.physComp = -1; m_sel.stickDir.clear();
+                    m_sel.stickAsButton = false; m_sel.actionType = H5ActionType::Xbox;
+                };
                 auto doTrigAssign = [&](const std::string& trigTarget, const std::string& trigState) {
                     if (physShort.empty()) return;
                     auto h5it = m_model.h5ActionEdits.find(physShort);
@@ -321,10 +348,13 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                     m_sel.physComp = -1; m_sel.stickAsButton = false;
                     m_sel.dpadDir.clear(); m_sel.actionType = H5ActionType::Xbox;
                 };
-                if (physNow.triggerL > kTrigThresh && m_sel.h9PrevPhysState.triggerL <= kTrigThresh)
-                    doTrigAssign("l2", "triggerL");
-                else if (physNow.triggerR > kTrigThresh && m_sel.h9PrevPhysState.triggerR <= kTrigThresh)
-                    doTrigAssign("r2", "triggerR");
+                if (physNow.triggerL > kTrigThresh && m_sel.h9PrevPhysState.triggerL <= kTrigThresh) {
+                    if (!m_sel.stickDir.empty()) doAxisTrigAssign("l2", "triggerL");
+                    else doTrigAssign("l2", "triggerL");
+                } else if (physNow.triggerR > kTrigThresh && m_sel.h9PrevPhysState.triggerR <= kTrigThresh) {
+                    if (!m_sel.stickDir.empty()) doAxisTrigAssign("r2", "triggerR");
+                    else doTrigAssign("r2", "triggerR");
+                }
             }
 
             // Analog stick tilt → assign source to a stick slot destination.
@@ -834,7 +864,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
 
                 // Tab buttons
                 constexpr float kBtnW = 80.0f;
-                float totalW = kBtnW * 5 + ImGui::GetStyle().ItemSpacing.x * 4;
+                float totalW = kBtnW * 6 + ImGui::GetStyle().ItemSpacing.x * 5;
                 float offX = (availW4 - totalW) * 0.5f;
                 if (offX > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX);
                 auto typeBtn4 = [&](const char* label, H5ActionType type) {
@@ -847,7 +877,27 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                 typeBtn4("Macro##axt1",         H5ActionType::Macro);     ImGui::SameLine();
                 typeBtn4("Teclado##axt2",       H5ActionType::Keyboard);  ImGui::SameLine();
                 typeBtn4("Rat\xC3\xB3n##axt3",  H5ActionType::Mouse);     ImGui::SameLine();
-                typeBtn4("Mov.Rat\xC3\xB3n##axt4", H5ActionType::MouseMove);
+                typeBtn4("Mov.Rat\xC3\xB3n##axt4", H5ActionType::MouseMove); ImGui::SameLine();
+                {
+                    auto it4 = m_model.axisActionEdits.find(axisKey);
+                    bool hasRanges4 = (it4 != m_model.axisActionEdits.end() &&
+                                       it4->second.type == HalfAxisActionType::Ranges &&
+                                       !it4->second.ranges.empty());
+                    if (hasRanges4) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+                    if (ImGui::Button("Rangos##axt5", { kBtnW, 0.0f })) {
+                        std::vector<RangeEdit> cur;
+                        if (hasRanges4)
+                            for (const auto& tr : it4->second.ranges) {
+                                RangeEdit re; re.from = tr.from; re.to = tr.to;
+                                re.action = tr.action; re.hasAction = tr.hasAction;
+                                cur.push_back(re);
+                            }
+                        m_trigRangeModal.open(axisKey, cur);
+                        m_sel.actionType = H5ActionType::Xbox;
+                        m_sel.captureKeys.clear(); m_sel.macroSel.clear();
+                    }
+                    if (hasRanges4) ImGui::PopStyleColor();
+                }
 
                 ImGui::Spacing();
 
@@ -1033,13 +1083,29 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
 
     // ── Modal Rangos ──────────────────────────────────────────────────────────
     if (m_trigRangeModal.render()) {
-        const std::string& trig = m_trigRangeModal.forTrigger();
-        if (trig == "l2")
-            m_model.trigLRangeEdits = m_trigRangeModal.result();
-        else
-            m_model.trigRRangeEdits = m_trigRangeModal.result();
-        m_model.trigActionEdits.erase(trig);
-        m_sel.triggerSrc.clear();
+        const std::string& key = m_trigRangeModal.forKey();
+        if (key == "l2" || key == "r2") {
+            if (key == "l2") m_model.trigLRangeEdits = m_trigRangeModal.result();
+            else             m_model.trigRRangeEdits = m_trigRangeModal.result();
+            m_model.trigActionEdits.erase(key);
+            m_sel.triggerSrc.clear();
+        } else {
+            // Axis direction ranges
+            const auto& edits = m_trigRangeModal.result();
+            if (edits.empty()) {
+                m_model.axisActionEdits.erase(key);
+            } else {
+                HalfAxisAction ha;
+                ha.type = HalfAxisActionType::Ranges;
+                for (const auto& re : edits) {
+                    TriggerRange tr; tr.from = re.from; tr.to = re.to;
+                    tr.action = re.action; tr.hasAction = re.hasAction;
+                    ha.ranges.push_back(tr);
+                }
+                m_model.axisActionEdits[key] = ha;
+            }
+            m_sel.physComp = -1; m_sel.stickDir.clear();
+        }
         m_sel.actionType = H5ActionType::Xbox;
         m_sel.captureKeys.clear(); m_sel.macroSel.clear();
     }

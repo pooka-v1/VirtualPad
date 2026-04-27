@@ -25,6 +25,7 @@ public:
     void        setConfig(const ControllerConfig& cfg) override { m_config = cfg; }
     GamepadState getPhysicalState()   const override { return m_physicalState; }
     std::vector<std::string> getActiveAxisActions() const override { return m_activeAxisActions; }
+    const std::unordered_map<std::string, ButtonAction>& getActiveAxisRangeActions() const override { return m_activeAxisRangeActions; }
     void        setPhysicalController(const PhysicalController& ctrl) override {
         m_physicalController    = ctrl;
         m_hasPhysicalController = true;
@@ -48,6 +49,7 @@ private:
     bool             m_lastTouchActive = false;
     GamepadState             m_physicalState;      // physical display state (pre-remapping)
     std::vector<std::string> m_activeAxisActions;  // axis_action keys active this frame (for PadEngine edge detection)
+    std::unordered_map<std::string, ButtonAction> m_activeAxisRangeActions; // active range ButtonAction per axis key
     PhysicalController       m_physicalController;
     bool                     m_hasPhysicalController = false;
 

@@ -28,6 +28,18 @@
         }
       },
       "axis_actions": {
+        "left_x_neg": {
+          "virtual": "left_x_neg"
+        },
+        "left_x_pos": {
+          "virtual": "left_x_pos"
+        },
+        "left_y_neg": {
+          "virtual": "left_y_neg"
+        },
+        "left_y_pos": {
+          "virtual": "left_y_pos"
+        },
         "right_x_neg": {
           "virtual": "right_x_neg"
         },

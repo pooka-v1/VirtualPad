@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <optional>
 #include <windows.h>
 #include <mmsystem.h>
 #include <vector>
@@ -641,6 +642,11 @@ void PadEngine::threadFunc() {
         std::unordered_map<std::string, std::string> axisMacroNames;
         std::unordered_map<std::string, bool>        axisKbPrev;
         std::unordered_map<std::string, bool>        axisMousePrev;
+        // Axis Ranges: prev active ButtonAction per key (nullopt = nothing was active)
+        std::unordered_map<std::string, std::optional<ButtonAction>> axisRangePrev;
+        // Axis Range macros: composite key = "axis_key|macro_name"
+        std::unordered_map<std::string, Macro> axisRangeMacros;
+        std::unordered_map<std::string, bool>  axisRangeMacroOk;
 
         // Dpad H5 actions (keyed by "up"/"down"/"left"/"right")
         std::unordered_map<std::string, Macro>       dpadMacros;
@@ -685,9 +691,34 @@ void PadEngine::threadFunc() {
                 if (action.type == ButtonActionType::Keyboard)   dpadKbPrev[dir]    = false;
                 if (action.type == ButtonActionType::MouseClick) dpadMousePrev[dir] = false;
             }
+            axisRangePrev.clear();
+            axisRangeMacros.clear();
+            axisRangeMacroOk.clear();
             for (const auto& [key, action] : cfg->axis_actions) {
                 if (action.type == HalfAxisActionType::Keyboard)   axisKbPrev[key]    = false;
                 if (action.type == HalfAxisActionType::MouseClick) axisMousePrev[key] = false;
+                if (action.type == HalfAxisActionType::Ranges) {
+                    axisRangePrev[key] = std::nullopt;
+                    for (const auto& r : action.ranges) {
+                        if (!r.hasAction || r.action.type != ButtonActionType::Macro) continue;
+                        std::string mkey = key + "|" + r.action.name;
+                        auto it = macroLibrary.find(r.action.name);
+                        if (it == macroLibrary.end()) {
+                            spdlog::warn("Macro '{}' (axis range {}) not found.", r.action.name, key);
+                            axisRangeMacroOk[mkey] = false;
+                            continue;
+                        }
+                        try {
+                            Macro m;
+                            MacroParser::parse(it->second, m);
+                            axisRangeMacros[mkey]  = std::move(m);
+                            axisRangeMacroOk[mkey] = true;
+                        } catch (...) {
+                            spdlog::warn("Failed to parse macro '{}' (axis range {}).", r.action.name, key);
+                            axisRangeMacroOk[mkey] = false;
+                        }
+                    }
+                }
             }
             lightningBotBit = findBotBit(*cfg, "LightningBot");
             if (lightningBotBit > 0)
@@ -1041,6 +1072,67 @@ void PadEngine::threadFunc() {
                             pushEvent({ PadEventType::MouseAction, btn + " click", true });
                     }
                     prev = active;
+                }
+
+                // Axis Ranges: Keyboard / MouseClick / Macro edge-triggered per range action
+                {
+                    const auto& rangeActions = input->getActiveAxisRangeActions();
+                    for (auto& [key, prev] : axisRangePrev) {
+                        auto it = rangeActions.find(key);
+                        bool isActive = (it != rangeActions.end());
+                        bool changed  = isActive
+                            ? (!prev.has_value() ||
+                               prev->type        != it->second.type        ||
+                               prev->name        != it->second.name        ||
+                               prev->mouseButton != it->second.mouseButton ||
+                               prev->keys        != it->second.keys)
+                            : prev.has_value();
+
+                        if (!changed) continue;
+
+                        // Release previous action
+                        if (prev.has_value()) {
+                            if (prev->type == ButtonActionType::Keyboard)
+                                sendKeyCombo(prev->keys, false);
+                            else if (prev->type == ButtonActionType::MouseClick)
+                                sendMouseButton(prev->mouseButton, false);
+                            else if (prev->type == ButtonActionType::Macro) {
+                                auto mit = axisRangeMacros.find(key + "|" + prev->name);
+                                if (mit != axisRangeMacros.end() && axisRangeMacroOk[key + "|" + prev->name])
+                                    if (mit->second.getMode() == MacroRepeatMode::UntilRelease)
+                                        mit->second.stop();
+                            }
+                        }
+                        // Activate new action
+                        if (isActive) {
+                            const ButtonAction& cur = it->second;
+                            if (cur.type == ButtonActionType::Keyboard) {
+                                sendKeyCombo(cur.keys, true);
+                                std::string combo;
+                                for (const auto& k : cur.keys) { if (!combo.empty()) combo += '+'; combo += k; }
+                                pushEvent({ PadEventType::KeyboardAction, combo, true });
+                            } else if (cur.type == ButtonActionType::MouseClick) {
+                                sendMouseButton(cur.mouseButton, true);
+                                pushEvent({ PadEventType::MouseAction, cur.mouseButton + " click", true });
+                            } else if (cur.type == ButtonActionType::Macro) {
+                                std::string mkey = key + "|" + cur.name;
+                                auto mit = axisRangeMacros.find(mkey);
+                                if (mit != axisRangeMacros.end() && axisRangeMacroOk[mkey]) {
+                                    if (mit->second.getMode() == MacroRepeatMode::UntilRelease)
+                                        mit->second.start();
+                                    else
+                                        mit->second.toggle();
+                                    pushEvent({ PadEventType::MacroToggle, cur.name, mit->second.isActive() });
+                                }
+                            }
+                            prev = cur;
+                        } else {
+                            prev = std::nullopt;
+                        }
+                    }
+                    // Tick active axis range macros every frame
+                    for (auto& [mkey, macro] : axisRangeMacros)
+                        macro.tick(state);
                 }
             }
 

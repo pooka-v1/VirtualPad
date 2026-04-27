@@ -18,6 +18,7 @@ public:
     void        setConfig(const ControllerConfig& cfg) override { m_config = cfg; }
     GamepadState getPhysicalState() const override { return m_physicalState; }
     std::vector<std::string> getActiveAxisActions() const override { return m_activeAxisActions; }
+    const std::unordered_map<std::string, ButtonAction>& getActiveAxisRangeActions() const override { return m_activeAxisRangeActions; }
     void        setPhysicalController(const PhysicalController& ctrl) override {
         m_physicalController    = ctrl;
         m_hasPhysicalController = true;
@@ -28,6 +29,7 @@ private:
     ControllerConfig m_config;
     DWORD            m_lastButtonMask = 0;
     std::vector<std::string> m_activeAxisActions;
+    std::unordered_map<std::string, ButtonAction> m_activeAxisRangeActions;
     GamepadState       m_physicalState;
     PhysicalController m_physicalController;
     bool               m_hasPhysicalController = false;

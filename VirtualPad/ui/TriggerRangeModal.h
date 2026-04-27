@@ -11,7 +11,7 @@
 // Usage:
 //   open(trigger, currentRanges)   — call when "Rangos" button is pressed
 //   render()                       — call every frame; returns true on Aceptar
-//   result() / forTrigger()        — valid only when render() returns true
+//   result() / forKey()            — valid only when render() returns true
 // ---------------------------------------------------------------------------
 class TriggerRangeModal {
 public:
@@ -19,16 +19,16 @@ public:
     void open(const std::string& trigger, const std::vector<RangeEdit>& current);
 
     // Render the popup. Returns true once when the user accepts.
-    // Caller must then read result() and forTrigger() and apply them.
+    // Caller must then read result() and forKey() and apply them.
     bool render();
 
-    const std::vector<RangeEdit>& result()     const { return m_work; }
-    const std::string&            forTrigger() const { return m_forTrigger; }
-    bool                          isOpen()     const { return m_open; }
+    const std::vector<RangeEdit>& result() const { return m_work; }
+    const std::string&            forKey() const { return m_forKey; }
+    bool                          isOpen() const { return m_open; }
 
 private:
-    bool         m_open      = false;
-    std::string  m_forTrigger;
+    bool         m_open   = false;
+    std::string  m_forKey;
     std::vector<RangeEdit> m_work;
     int          m_selSect   = -1;
     H5ActionType m_actType   = H5ActionType::Xbox;

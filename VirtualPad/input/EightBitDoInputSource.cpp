@@ -176,6 +176,7 @@ bool EightBitDoInputSource::read(GamepadState& state) {
 
     // ── axis_actions: per-direction half-axis processing ─────────────────────
     m_activeAxisActions.clear();
+    m_activeAxisRangeActions.clear();
     if (!m_config.axis_actions.empty()) {
         auto setVBtn = [&](const std::string& name, bool val) {
             if (!val) return;
@@ -229,8 +230,8 @@ bool EightBitDoInputSource::read(GamepadState& state) {
                     break;
                 case HalfAxisActionType::Trigger:
                     if (absV > ha.threshold) {
-                        if      (ha.target == "l2" || ha.target == "trigger_l") state.triggerL = 1.0f;
-                        else if (ha.target == "r2" || ha.target == "trigger_r") state.triggerR = 1.0f;
+                        if      (ha.target == "l2" || ha.target == "trigger_l") state.triggerL = absV;
+                        else if (ha.target == "r2" || ha.target == "trigger_r") state.triggerR = absV;
                     }
                     break;
                 case HalfAxisActionType::StickSlot:
@@ -257,7 +258,8 @@ bool EightBitDoInputSource::read(GamepadState& state) {
                         case ButtonActionType::Keyboard:
                         case ButtonActionType::MouseClick:
                         case ButtonActionType::Macro:
-                            m_activeAxisActions.push_back(key); break;
+                            m_activeAxisRangeActions[key] = r.action;
+                            break;
                         default: break;
                         }
                         break;
@@ -411,6 +413,7 @@ void EightBitDoInputSource::applyAxesResidual(const JOYINFOEX& info, GamepadStat
     };
 
     m_activeAxisActions.clear();
+    m_activeAxisRangeActions.clear();
     for (const auto& [source, mapping] : m_config.axes) {
         float v = normalizeAxis(getAxisValue(info, source));
         if (mapping.invert) v = -v;
