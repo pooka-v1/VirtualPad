@@ -13,6 +13,7 @@
 #include <string>
 
 #include "input/EightBitDoInputSource.h"
+#include "input/XInputInputSource.h"
 #include "input/HIDScanner.h"
 #include "input/HIDInputSource.h"
 #include "output/ViGEmOutputAdapter.h"
@@ -340,6 +341,14 @@ void PadEngine::monitorFunc() {
             if (vVid && e.wMid == vVid && e.wPid == vPid) continue;  // skip virtual pad
             const ControllerConfig* cfg = findConfig(configs, e.wMid, e.wPid);
             if (cfg && cfg->mode == "hid") continue;
+            // XInput devices can appear as multiple WinMM bridge entries (one per slot).
+            // Keep only the first entry per VID/PID so a single physical device is one candidate.
+            // For XInput devices the WinMM port equals the XInput slot.
+            // Filter zombie bridge entries: real slots respond to XInputGetState.
+            if (cfg && cfg->mode == "xinput") {
+                XINPUT_STATE xs = {};
+                if (XInputGetState(e.id, &xs) != ERROR_SUCCESS) continue;
+            }
 
             DeviceCandidate c;
             c.source  = DeviceCandidate::Source::WinMM;
@@ -357,11 +366,7 @@ void PadEngine::monitorFunc() {
         for (auto& h : hidEntries) {
             if (vVid && h.vid == vVid && h.pid == vPid) continue;  // skip virtual pad
             const ControllerConfig* cfg = findConfig(configs, h.vid, h.pid, h.connectionType);
-            bool inWinMM = false;
-            for (auto& e : winmmEntries)
-                if (e.wMid == h.vid && e.wPid == h.pid) { inWinMM = true; break; }
-            if (!cfg && inWinMM) continue;
-            if (cfg && cfg->mode != "hid" && inWinMM) continue;
+            if (!cfg || cfg->mode != "hid") continue;
 
             DeviceCandidate c;
             c.source         = DeviceCandidate::Source::HID;
@@ -474,6 +479,14 @@ void PadEngine::threadFunc() {
                     if (vpCfg.vid && e.wMid == vpCfg.vid && e.wPid == vpCfg.pid) continue;
                     const ControllerConfig* c = findConfig(configs, e.wMid, e.wPid);
                     if (c && c->mode == "hid") continue;
+                    // XInput devices can appear as multiple WinMM bridge entries (one per slot).
+                    // Keep only the first entry per VID/PID so a single physical device is one candidate.
+                    // For XInput devices the WinMM port equals the XInput slot.
+                    // Filter zombie bridge entries: real slots respond to XInputGetState.
+                    if (c && c->mode == "xinput") {
+                        XINPUT_STATE xs = {};
+                        if (XInputGetState(e.id, &xs) != ERROR_SUCCESS) continue;
+                    }
                     DeviceCandidate dc;
                     dc.source  = DeviceCandidate::Source::WinMM;
                     dc.port    = e.id;
@@ -490,11 +503,7 @@ void PadEngine::threadFunc() {
                 for (auto& h : hidEntries) {
                     if (vpCfg.vid && h.vid == vpCfg.vid && h.pid == vpCfg.pid) continue;
                     const ControllerConfig* c = findConfig(configs, h.vid, h.pid, h.connectionType);
-                    bool inWinMM = false;
-                    for (auto& e : winmmEntries)
-                        if (e.wMid == h.vid && e.wPid == h.pid) { inWinMM = true; break; }
-                    if (!c && inWinMM) continue;
-                    if (c && c->mode != "hid" && inWinMM) continue;
+                    if (!c || c->mode != "hid") continue;
                     DeviceCandidate dc;
                     dc.source         = DeviceCandidate::Source::HID;
                     dc.hidPath        = h.path;
@@ -597,6 +606,8 @@ void PadEngine::threadFunc() {
         std::unique_ptr<IInputSource> input;
         if (selected.source == DeviceCandidate::Source::HID)
             input = std::make_unique<HIDInputSource>(selected.hidPath, *cfg);
+        else if (cfg->mode == "xinput")
+            input = std::make_unique<XInputInputSource>(selected.port, *cfg);
         else
             input = std::make_unique<EightBitDoInputSource>(selected.port, *cfg);
 

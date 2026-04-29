@@ -43,4 +43,7 @@ private:
     void buildPhysicalButtons(const JOYINFOEX& info);
     void buildPhysicalAxes   (const JOYINFOEX& info);
     void applyAxesResidual   (const JOYINFOEX& info, GamepadState& state);
+
+protected:
+    bool processJoyInfo(const JOYINFOEX& info, GamepadState& state);
 };

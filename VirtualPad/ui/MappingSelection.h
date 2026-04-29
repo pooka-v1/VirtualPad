@@ -40,6 +40,11 @@ struct MappingSelection {
     int         flashComp       = -1;
     float       flashTimer      = 0.0f;
     std::string flashVirtShort;
+    std::string flashSlotKey;        // slot key (e.g. "left_y_pos") for virtual stick-arrow flash
+
+    // --- Flash feedback on physical pad (source analog direction) ---
+    int         flashPhysArrowComp = -1;
+    std::string flashPhysArrowDir;
 
     // --- H5 action panel state ---
     H5ActionType actionType     = H5ActionType::Xbox;
@@ -72,6 +77,9 @@ struct MappingSelection {
         flashComp     = -1;
         flashTimer    = 0.0f;
         flashVirtShort.clear();
+        flashSlotKey.clear();
+        flashPhysArrowComp = -1;
+        flashPhysArrowDir.clear();
         actionType    = H5ActionType::Xbox;
         captureKeys.clear();
         macroSel.clear();

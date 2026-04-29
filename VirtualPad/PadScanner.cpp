@@ -26,7 +26,6 @@ std::vector<PadScanner::DeviceInfo> PadScanner::scan() {
 
         result.push_back(dev);
     }
-
     return result;
 }
 

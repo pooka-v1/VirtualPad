@@ -112,7 +112,7 @@
         }
       },
       "dpad": "hid_hat",
-      "layout_id": "pro3_ps",
+      "layout_id": "8BitDo Pro 3 D mode",
       "mode": "hid",
       "pid": "6009",
       "source_name": "8BitDo Pro 3 (D-mode)",
@@ -168,25 +168,25 @@
         "_note": "HID X-mode prototipo: triggers separados funcionan, pero solo 10 botones (1-10 correlativos, sin Home/L4/R4/Lp/Rp). Hat: [1,8] donde 1=N...8=NW, center=0. Triggers: hid_z combinado 16-bit, invert:true. Reactivar cambiando mode a hid y copiando axes/buttons/dpad de abajo."
       },
       "axes": {
-        "dwRpos": {
-          "invert": true,
-          "target": "right_y"
-        },
-        "dwUpos": {
+        "hid_rx": {
           "invert": false,
           "target": "right_x"
         },
-        "dwXpos": {
+        "hid_ry": {
+          "invert": false,
+          "target": "right_y"
+        },
+        "hid_x": {
           "invert": false,
           "target": "left_x"
         },
-        "dwYpos": {
-          "invert": true,
+        "hid_y": {
+          "invert": false,
           "target": "left_y"
         },
-        "dwZpos": {
+        "hid_z": {
           "invert": false,
-          "target": "trigger_combined"
+          "target": "trigger_l"
         }
       },
       "buttons": {
@@ -194,7 +194,10 @@
           "physical": "a",
           "virtual": "a"
         },
-        "10": "r3",
+        "10": {
+          "physical": "r3",
+          "virtual": "r3"
+        },
         "2": {
           "physical": "b",
           "virtual": "b"
@@ -207,14 +210,29 @@
           "physical": "y",
           "virtual": "y"
         },
-        "5": "l1",
-        "6": "r1",
-        "7": "select",
-        "8": "start",
-        "9": "l3"
+        "5": {
+          "physical": "l1",
+          "virtual": "l1"
+        },
+        "6": {
+          "physical": "r1",
+          "virtual": "r1"
+        },
+        "7": {
+          "physical": "select",
+          "virtual": "select"
+        },
+        "8": {
+          "physical": "start",
+          "virtual": "start"
+        },
+        "9": {
+          "physical": "l3",
+          "virtual": "l3"
+        }
       },
-      "dpad": "pov",
-      "layout_id": "pro3_ps",
+      "dpad": "hid_hat",
+      "layout_id": "8BitDo Pro 3 X mode",
       "mode": "xinput",
       "pid": "310B",
       "source_name": "8BitDo Pro 3 (X-mode)",
@@ -250,7 +268,7 @@
       "buttons": {
         "1": {
           "physical": "a",
-          "virtual": "a"
+          "virtual": "b"
         },
         "11": {
           "physical": "select",
@@ -274,18 +292,18 @@
         },
         "2": {
           "physical": "b",
-          "virtual": "b"
+          "virtual": "a"
         },
         "3": {
           "physical": "rp"
         },
         "4": {
           "physical": "x",
-          "virtual": "x"
+          "virtual": "y"
         },
         "5": {
           "physical": "y",
-          "virtual": "y"
+          "virtual": "x"
         },
         "6": {
           "physical": "lp"
@@ -301,12 +319,11 @@
       },
       "dpad": "hid_hat",
       "dpad_remap": {
-        "down": "a",
-        "left": "x",
-        "right": "b",
-        "up": "y"
+        "down": "dpad_down",
+        "right": "dpad_right",
+        "up": "dpad_up"
       },
-      "layout_id": "pro2_ps",
+      "layout_id": "8BitDo Pro 2 D mode",
       "mode": "hid",
       "pid": "6006",
       "source_name": "8BitDo Pro 2 (D-mode)",
@@ -354,7 +371,7 @@
         "9": "l3"
       },
       "dpad": "pov",
-      "layout_id": "pro2_ps",
+      "layout_id": "8BitDo Pro 2 D mode",
       "mode": "xinput",
       "pid": "02E0",
       "source_name": "8BitDo Pro 2 (X-mode)",

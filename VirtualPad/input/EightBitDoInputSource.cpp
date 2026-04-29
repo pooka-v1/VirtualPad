@@ -22,6 +22,10 @@ bool EightBitDoInputSource::read(GamepadState& state) {
     if (joyGetPosEx(m_joyId, &info) != JOYERR_NOERROR)
         return false;
 
+    return processJoyInfo(info, state);
+}
+
+bool EightBitDoInputSource::processJoyInfo(const JOYINFOEX& info, GamepadState& state) {
     if (m_hasPhysicalController) {
         // ── Component-system path ─────────────────────────────────────────────
         m_physicalState = {};

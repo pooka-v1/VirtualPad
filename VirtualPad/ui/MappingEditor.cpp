@@ -52,6 +52,33 @@ void MappingEditor::save() {
 }
 
 // ---------------------------------------------------------------------------
+// Converts a slot key ("left_y_pos", "right_x_neg", …) to the virtual stick
+// component index and arrow direction string needed by renderStickArrows.
+static std::pair<int, std::string> slotKeyToArrow(const PadLayout& vLayout, const std::string& sk) {
+    bool isLeft  = sk.rfind("left_",  0) == 0;
+    bool isRight = sk.rfind("right_", 0) == 0;
+    if (!isLeft && !isRight) return {-1, ""};
+    size_t off = isLeft ? 5 : 6;
+    if (sk.size() < off + 3) return {-1, ""};
+    char axis  = sk[off];
+    std::string sign = sk.substr(off + 2);
+    std::string dir;
+    if      (axis == 'x' && sign == "pos") dir = "right";
+    else if (axis == 'x' && sign == "neg") dir = "left";
+    else if (axis == 'y' && sign == "pos") dir = "up";
+    else if (axis == 'y' && sign == "neg") dir = "down";
+    else return {-1, ""};
+    for (int i = 0; i < (int)vLayout.components.size(); ++i) {
+        if (vLayout.components[i].type != "stick") continue;
+        const std::string& sx = vLayout.components[i].stateX;
+        if ((isLeft  && sx.rfind("left",  0) == 0) ||
+            (isRight && sx.rfind("right", 0) == 0))
+            return {i, dir};
+    }
+    return {-1, dir};
+}
+
+// ---------------------------------------------------------------------------
 // render — full mapping editor UI (called each frame when active)
 // ---------------------------------------------------------------------------
 void MappingEditor::render(PadView& phys, PadView& virt) {
@@ -257,6 +284,9 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                                 m_sel.flashComp = -1; m_sel.flashTimer = 0.0f; m_sel.flashVirtShort.clear();
                             }
                         }
+                        m_sel.flashPhysArrowComp = m_sel.physComp;
+                        m_sel.flashPhysArrowDir  = m_sel.stickDir;
+                        if (m_sel.flashTimer < 1.0f) m_sel.flashTimer = 1.0f;
                         m_sel.physComp = -1; m_sel.stickDir.clear();
                         m_sel.stickAsButton = false; m_sel.actionType = H5ActionType::Xbox;
                     } else {
@@ -321,8 +351,10 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                     } else {
                         m_model.axisActionEdits[axisKey9] = ha9;
                         m_sel.flashComp      = findCompByState(virt.getLayout(), trigState);
-                        m_sel.flashTimer     = 0.5f;
+                        m_sel.flashTimer     = 1.0f;
                         m_sel.flashVirtShort = trigState;
+                        m_sel.flashPhysArrowComp = m_sel.physComp;
+                        m_sel.flashPhysArrowDir  = m_sel.stickDir;
                     }
                     m_sel.physComp = -1; m_sel.stickDir.clear();
                     m_sel.stickAsButton = false; m_sel.actionType = H5ActionType::Xbox;
@@ -358,10 +390,17 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
             }
 
             // Analog stick tilt → assign source to a stick slot destination.
-            if (m_sel.physComp >= 0 && !physShort.empty()) {
+            // physShort is empty for stick sources (state field unused), so also check stickDir.
+            if (m_sel.physComp >= 0 && (!physShort.empty() || !m_sel.stickDir.empty())) {
                 const auto& virtComps2 = virt.getLayout().components;
                 for (int i = 0; i < (int)virtComps2.size(); ++i) {
                     if (virtComps2[i].type != "stick") continue;
+                    // Rising-edge: require stick to have been below threshold last frame.
+                    // Prevents immediate fire when physComp is set while a stick is held.
+                    float prevSx = 0.0f, prevSy = 0.0f;
+                    readStickXY(m_sel.h9PrevPhysState, virtComps2[i].stateX, prevSx, prevSy);
+                    if (prevSx >=  m_stickSelectThreshold || prevSx <= -m_stickSelectThreshold ||
+                        prevSy >=  m_stickSelectThreshold || prevSy <= -m_stickSelectThreshold) continue;
                     float sx = 0.0f, sy = 0.0f;
                     readStickXY(physNow, virtComps2[i].stateX, sx, sy);
                     std::string slotDir;
@@ -378,16 +417,44 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                     else if (slotDir == "right") slotKey = vxId + "_pos";
                     else if (slotDir == "left")  slotKey = vxId + "_neg";
 
-                    auto it = m_model.buttonEdits.find(physShort);
-                    if (it != m_model.buttonEdits.end() && it->second == slotKey) {
-                        m_model.buttonEdits.erase(physShort);
+                    if (!m_sel.stickDir.empty()) {
+                        // Axis-action source: assign StickSlot target.
+                        auto [xId9, yId9] = stickIdsFromStateX(selComp2.stateX);
+                        std::string axisKey9;
+                        if      (m_sel.stickDir == "up")    axisKey9 = yId9 + "_pos";
+                        else if (m_sel.stickDir == "down")  axisKey9 = yId9 + "_neg";
+                        else if (m_sel.stickDir == "right") axisKey9 = xId9 + "_pos";
+                        else if (m_sel.stickDir == "left")  axisKey9 = xId9 + "_neg";
+                        if (!axisKey9.empty()) {
+                            HalfAxisAction ha;
+                            ha.type = HalfAxisActionType::StickSlot; ha.target = slotKey;
+                            auto it9 = m_model.axisActionEdits.find(axisKey9);
+                            bool already9 = (it9 != m_model.axisActionEdits.end() &&
+                                             it9->second.type == ha.type &&
+                                             it9->second.target == ha.target);
+                            if (already9) {
+                                m_model.axisActionEdits.erase(axisKey9);
+                                m_sel.flashSlotKey.clear(); m_sel.flashTimer = 0.0f; m_sel.flashComp = -1;
+                            } else {
+                                m_model.axisActionEdits[axisKey9] = ha;
+                                m_sel.flashSlotKey = slotKey; m_sel.flashTimer = 1.0f; m_sel.flashComp = -1;
+                                m_sel.flashPhysArrowComp = m_sel.physComp;
+                                m_sel.flashPhysArrowDir  = m_sel.stickDir;
+                            }
+                            m_sel.physComp = -1; m_sel.stickDir.clear();
+                            m_sel.stickAsButton = false; m_sel.actionType = H5ActionType::Xbox;
+                        }
                     } else {
-                        m_model.h5ActionEdits.erase(physShort);
-                        m_model.buttonEdits[physShort] = slotKey;
+                        auto it = m_model.buttonEdits.find(physShort);
+                        if (it != m_model.buttonEdits.end() && it->second == slotKey) {
+                            m_model.buttonEdits.erase(physShort);
+                        } else {
+                            m_model.h5ActionEdits.erase(physShort);
+                            m_model.buttonEdits[physShort] = slotKey;
+                        }
+                        m_sel.physComp = -1; m_sel.stickAsButton = false;
+                        m_sel.dpadDir.clear(); m_sel.actionType = H5ActionType::Xbox;
                     }
-
-                    m_sel.physComp = -1; m_sel.stickAsButton = false;
-                    m_sel.dpadDir.clear(); m_sel.actionType = H5ActionType::Xbox;
                     break;
                 }
             }
@@ -506,7 +573,10 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
 
     // ── Construir estados de display ──────────────────────────────────────────
     m_sel.flashTimer -= dt;
-    if (m_sel.flashTimer <= 0.0f) { m_sel.flashComp = -1; m_sel.flashVirtShort.clear(); }
+    if (m_sel.flashTimer <= 0.0f) {
+        m_sel.flashComp = -1; m_sel.flashVirtShort.clear(); m_sel.flashSlotKey.clear();
+        m_sel.flashPhysArrowComp = -1; m_sel.flashPhysArrowDir.clear();
+    }
 
     GamepadState physDisplay{};
     GamepadState virtDisplay{};
@@ -526,6 +596,19 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
             }
         }
     }
+    // Apply a virtual short OR a stick slot key ("left_x_neg" etc.) to virtDisplay.
+    auto applyVirtShort = [&](const std::string& vs) {
+        if      (vs == "left_x_pos")  virtDisplay.leftX  =  1.0f;
+        else if (vs == "left_x_neg")  virtDisplay.leftX  = -1.0f;
+        else if (vs == "left_y_pos")  virtDisplay.leftY  =  1.0f;
+        else if (vs == "left_y_neg")  virtDisplay.leftY  = -1.0f;
+        else if (vs == "right_x_pos") virtDisplay.rightX =  1.0f;
+        else if (vs == "right_x_neg") virtDisplay.rightX = -1.0f;
+        else if (vs == "right_y_pos") virtDisplay.rightY =  1.0f;
+        else if (vs == "right_y_neg") virtDisplay.rightY = -1.0f;
+        else activateState(virtDisplay, shortToState(vs));
+    };
+
     if (m_sel.physComp >= 0) {
         const auto& physComps = phys.getLayout().components;
         if (m_sel.physComp < (int)physComps.size()) {
@@ -545,7 +628,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                 if (!activateTriggerIfAssigned(physShort)) {
                     auto it = m_model.buttonEdits.find(physShort);
                     std::string virtShort = (it != m_model.buttonEdits.end()) ? it->second : physShort;
-                    activateState(virtDisplay, shortToState(virtShort));
+                    applyVirtShort(virtShort);
                 }
             } else if (selComp.type == "stick" && m_sel.stickAsButton) {
                 activateState(physDisplay, selComp.stateClick);
@@ -553,7 +636,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                 if (!activateTriggerIfAssigned(physShort)) {
                     auto it = m_model.buttonEdits.find(physShort);
                     std::string virtShort = (it != m_model.buttonEdits.end()) ? it->second : physShort;
-                    activateState(virtDisplay, shortToState(virtShort));
+                    applyVirtShort(virtShort);
                 }
             } else if (selComp.type == "stick") {
                 // Show current axis_action assignment in virtual display
@@ -596,7 +679,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                 if (!activateTriggerIfAssigned(physShort)) {
                     auto it = m_model.buttonEdits.find(physShort);
                     std::string virtShort = (it != m_model.buttonEdits.end()) ? it->second : physShort;
-                    activateState(virtDisplay, shortToState(virtShort));
+                    applyVirtShort(virtShort);
                 }
             }
         }
@@ -610,17 +693,36 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
             if (act.type == ButtonActionType::TriggerPassthrough)
                 activateState(virtDisplay, act.target == "l2" ? "triggerL" : "triggerR");
             else if (act.type == ButtonActionType::VirtualButton)
-                activateState(virtDisplay, shortToState(act.name));
+                applyVirtShort(act.name);
         }
     }
     if (m_sel.flashComp >= 0 && !m_sel.flashVirtShort.empty())
         activateState(virtDisplay, shortToState(m_sel.flashVirtShort));
+    if (m_sel.flashTimer > 0.0f && !m_sel.flashSlotKey.empty()) {
+        const std::string& sk = m_sel.flashSlotKey;
+        if      (sk == "left_x_pos")  virtDisplay.leftX  =  1.0f;
+        else if (sk == "left_x_neg")  virtDisplay.leftX  = -1.0f;
+        else if (sk == "left_y_pos")  virtDisplay.leftY  =  1.0f;
+        else if (sk == "left_y_neg")  virtDisplay.leftY  = -1.0f;
+        else if (sk == "right_x_pos") virtDisplay.rightX =  1.0f;
+        else if (sk == "right_x_neg") virtDisplay.rightX = -1.0f;
+        else if (sk == "right_y_pos") virtDisplay.rightY =  1.0f;
+        else if (sk == "right_y_neg") virtDisplay.rightY = -1.0f;
+    }
 
     // ── Pad físico ────────────────────────────────────────────────────────────
     ImGui::BeginGroup();
     m_physOrigin = ImGui::GetCursorScreenPos();
     phys.render(physDisplay);
-    phys.renderStickArrows(m_physOrigin, m_sel.physComp, m_sel.stickDir);
+    {
+        int   physArrowComp = m_sel.physComp;
+        std::string physArrowDir = m_sel.stickDir;
+        if (physArrowComp < 0 && m_sel.flashTimer > 0.0f && m_sel.flashPhysArrowComp >= 0) {
+            physArrowComp = m_sel.flashPhysArrowComp;
+            physArrowDir  = m_sel.flashPhysArrowDir;
+        }
+        phys.renderStickArrows(m_physOrigin, physArrowComp, physArrowDir);
+    }
     ImGui::Spacing();
     ImGui::SetWindowFontScale(1.35f);
     ImGui::TextDisabled("F\xC3\xADsico");
@@ -645,7 +747,60 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
     ImGui::BeginGroup();
     m_virtOrigin = ImGui::GetCursorScreenPos();
     virt.render(virtDisplay);
-    virt.renderStickArrows(m_virtOrigin, -1, "");
+    {
+        // Determine which virtual stick arrow to highlight:
+        // steady-state (current assignment) or flash (just assigned).
+        int         virtArrowComp = -1;
+        std::string virtArrowDir;
+
+        // Steady-state: button / dpad / stickAsButton source with a slot assignment.
+        if (m_sel.physComp >= 0) {
+            const auto& pComps = phys.getLayout().components;
+            if (m_sel.physComp < (int)pComps.size()) {
+                const PadComponent& sc = pComps[m_sel.physComp];
+                std::string physShort;
+                if (sc.type == "button")
+                    physShort = stateToShort(sc.state);
+                else if (sc.type == "stick" && m_sel.stickAsButton)
+                    physShort = stateToShort(sc.stateClick);
+                else if (sc.type == "dpad" && !m_sel.dpadDir.empty())
+                    physShort = stateToShort(dpadDirToState(sc, m_sel.dpadDir));
+                else if (sc.type == "stick" && !m_sel.stickDir.empty()) {
+                    // Axis-action source: show StickSlot target if assigned.
+                    auto [xId, yId] = stickIdsFromStateX(sc.stateX);
+                    std::string ak;
+                    if      (m_sel.stickDir == "up")    ak = yId + "_pos";
+                    else if (m_sel.stickDir == "down")  ak = yId + "_neg";
+                    else if (m_sel.stickDir == "right") ak = xId + "_pos";
+                    else if (m_sel.stickDir == "left")  ak = xId + "_neg";
+                    auto it = m_model.axisActionEdits.find(ak);
+                    if (it != m_model.axisActionEdits.end() &&
+                        it->second.type == HalfAxisActionType::StickSlot)
+                        std::tie(virtArrowComp, virtArrowDir) =
+                            slotKeyToArrow(virt.getLayout(), it->second.target);
+                }
+                if (!physShort.empty()) {
+                    auto it = m_model.buttonEdits.find(physShort);
+                    if (it != m_model.buttonEdits.end() && !it->second.empty())
+                        std::tie(virtArrowComp, virtArrowDir) =
+                            slotKeyToArrow(virt.getLayout(), it->second);
+                }
+            }
+        } else if (!m_sel.triggerSrc.empty()) {
+            auto it = m_model.trigActionEdits.find(m_sel.triggerSrc);
+            if (it != m_model.trigActionEdits.end() &&
+                it->second.type == ButtonActionType::VirtualButton)
+                std::tie(virtArrowComp, virtArrowDir) =
+                    slotKeyToArrow(virt.getLayout(), it->second.name);
+        }
+
+        // Flash overrides steady-state for 0.5 s after assignment.
+        if (m_sel.flashTimer > 0.0f && !m_sel.flashSlotKey.empty())
+            std::tie(virtArrowComp, virtArrowDir) =
+                slotKeyToArrow(virt.getLayout(), m_sel.flashSlotKey);
+
+        virt.renderStickArrows(m_virtOrigin, virtArrowComp, virtArrowDir);
+    }
     ImGui::Spacing();
     ImGui::SetWindowFontScale(1.35f);
     ImGui::TextDisabled("Virtual (Xbox One)");
@@ -1480,6 +1635,7 @@ void MappingEditor::onVirtArrowHit(PadView& phys, PadView& virt, int virtComp, c
                             it->second.name == slotKey);
         if (alreadySlot) {
             m_model.trigActionEdits.erase(source);
+            m_sel.flashSlotKey.clear(); m_sel.flashTimer = 0.0f;
         } else {
             auto& ranges = (source == "l2") ? m_model.trigLRangeEdits : m_model.trigRRangeEdits;
             ranges.clear();
@@ -1487,15 +1643,18 @@ void MappingEditor::onVirtArrowHit(PadView& phys, PadView& virt, int virtComp, c
             act.type = ButtonActionType::VirtualButton;
             act.name = slotKey;
             m_model.trigActionEdits[source] = act;
+            m_sel.flashSlotKey = slotKey; m_sel.flashTimer = 1.0f; m_sel.flashComp = -1;
         }
     } else {
         // Buttons / dpad: stored as buttonEdits[physShort] = slotDir.
         auto it = m_model.buttonEdits.find(source);
         if (it != m_model.buttonEdits.end() && it->second == slotKey) {
             m_model.buttonEdits.erase(source);
+            m_sel.flashSlotKey.clear(); m_sel.flashTimer = 0.0f;
         } else {
             m_model.h5ActionEdits.erase(source);
             m_model.buttonEdits[source] = slotKey;
+            m_sel.flashSlotKey = slotKey; m_sel.flashTimer = 1.0f; m_sel.flashComp = -1;
         }
     }
 
@@ -1535,10 +1694,14 @@ void MappingEditor::onVirtHitAxisAction(PadView& phys, PadView& virt, ImVec2 mou
                                 it->second.target == slotKey);
                 if (already) {
                     m_model.axisActionEdits.erase(axisKey);
+                    m_sel.flashSlotKey.clear(); m_sel.flashTimer = 0.0f;
                 } else {
                     HalfAxisAction ha;
                     ha.type = HalfAxisActionType::StickSlot; ha.target = slotKey;
                     m_model.axisActionEdits[axisKey] = ha;
+                    m_sel.flashSlotKey = slotKey; m_sel.flashTimer = 1.0f; m_sel.flashComp = -1;
+                    m_sel.flashPhysArrowComp = m_sel.physComp;
+                    m_sel.flashPhysArrowDir  = m_sel.stickDir;
                 }
             }
         }
@@ -1617,5 +1780,10 @@ void MappingEditor::onVirtHitAxisAction(PadView& phys, PadView& virt, ImVec2 mou
         }
     }
 
-    if (assigned) { m_sel.physComp = -1; m_sel.stickDir.clear(); }
+    if (assigned) {
+        m_sel.flashPhysArrowComp = m_sel.physComp;
+        m_sel.flashPhysArrowDir  = m_sel.stickDir;
+        m_sel.flashTimer = 1.0f;
+        m_sel.physComp = -1; m_sel.stickDir.clear();
+    }
 }

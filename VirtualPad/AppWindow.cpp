@@ -1,4 +1,6 @@
 ﻿#include "AppWindow.h"
+#include <xinput.h>
+#pragma comment(lib, "XInput.lib")
 
 #include <algorithm>
 #include <fstream>
@@ -235,6 +237,9 @@ void AppWindow::renderEngineTab() {
                                                      dev.connectionType);
             const char* displayName = cfg ? cfg->source_name.c_str() : dev.name.c_str();
             const char* src = (dev.source == DeviceCandidate::Source::HID) ? "HID" : "WinMM";
+            char slotStr[8] = "";
+            if (dev.source == DeviceCandidate::Source::WinMM && cfg && cfg->mode == "xinput")
+                snprintf(slotStr, sizeof(slotStr), "[%u]", dev.port);
 
             // Determine if this entry is the currently active device
             bool isActive = (dev.vid == activeDevice.vid && dev.pid == activeDevice.pid
@@ -247,11 +252,11 @@ void AppWindow::renderEngineTab() {
             if (isActive) {
                 ImGui::TextColored({ 0.3f, 1.0f, 0.3f, 1.0f }, "  >");
                 ImGui::SameLine();
-                ImGui::Text("[%s]  %s    VID:%04X  PID:%04X", src, displayName, dev.vid, dev.pid);
+                ImGui::Text("[%s]%s  %s    VID:%04X  PID:%04X", src, slotStr, displayName, dev.vid, dev.pid);
             } else {
                 ImGui::Text("   ");
                 ImGui::SameLine();
-                ImGui::Text("[%s]  %s    VID:%04X  PID:%04X", src, displayName, dev.vid, dev.pid);
+                ImGui::Text("[%s]%s  %s    VID:%04X  PID:%04X", src, slotStr, displayName, dev.vid, dev.pid);
                 ImGui::SameLine();
 
                 char btnLabel[64];
@@ -409,18 +414,28 @@ void AppWindow::renderScannerTab() {
     uint16_t  vVid = m_engine.getVirtualVid();
     uint16_t  vPid = m_engine.getVirtualPid();
 
-    // WinMM scan â€” fast, runs synchronously every second
-    if (now - m_lastScanTime > 1000) {
+    auto buildScanDevices = [&]() {
         auto all = PadScanner::scan();
         m_scanDevices.clear();
         for (auto& d : all) {
-            if (vVid && d.vid == vVid && d.pid == vPid) continue; // skip virtual pad
+            if (vVid && d.vid == vVid && d.pid == vPid) continue;
             const ControllerConfig* dcfg = findConfig(m_controllerConfigs, d.vid, d.pid);
-            if (dcfg && dcfg->mode == "hid") continue;           // HID devices go to HID section
+            if (dcfg && dcfg->mode == "hid") continue;
+            // For XInput devices the WinMM port equals the XInput slot.
+            // Filter zombie bridge entries: real slots respond to XInputGetState.
+            if (dcfg && dcfg->mode == "xinput") {
+                XINPUT_STATE xs = {};
+                if (XInputGetState(d.port, &xs) != ERROR_SUCCESS) continue;
+            }
             m_scanDevices.push_back(d);
         }
-        m_lastScanTime = now;
         if (m_scanSelected >= (int)m_scanDevices.size()) m_scanSelected = -1;
+    };
+
+    // WinMM scan — fast, runs synchronously every second
+    if (now - m_lastScanTime > 1000) {
+        buildScanDevices();
+        m_lastScanTime = now;
     }
 
     // HID scan â€” slow (opens every HID device), runs on a background thread
@@ -463,16 +478,8 @@ void AppWindow::renderScannerTab() {
     ImGui::Text("WinMM (%zu)", m_scanDevices.size());
     ImGui::SameLine();
     if (ImGui::SmallButton("Refresh")) {
-        auto all = PadScanner::scan();
-        m_scanDevices.clear();
-        for (auto& d : all) {
-            if (vVid && d.vid == vVid && d.pid == vPid) continue;
-            const ControllerConfig* dcfg = findConfig(m_controllerConfigs, d.vid, d.pid);
-            if (dcfg && dcfg->mode == "hid") continue;
-            m_scanDevices.push_back(d);
-        }
+        buildScanDevices();
         m_lastScanTime = now;
-        if (m_scanSelected >= (int)m_scanDevices.size()) m_scanSelected = -1;
         kickHidScan();
     }
     ImGui::Separator();
