@@ -3,7 +3,8 @@
     "allow": [
       "Bash(ls *.sln)",
       "Bash(ls VirtualPad/*.sln)",
-      "Bash(find . -name \"*.sln\" -maxdepth 3)"
+      "Bash(find . -name \"*.sln\" -maxdepth 3)",
+      "PowerShell(Get-Content *)"
     ]
   }
 }
