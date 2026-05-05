@@ -26,8 +26,9 @@ struct VirtualPadConfig {
     uint16_t                 vid                    = 0x5650;   // defaults if file is missing
     uint16_t                 pid                    = 0x0001;
     std::string              logLevel               = "info";   // trace/debug/info/warn/error
+    std::string              locale                 = "en";
     std::vector<std::string> acceptedXboxButtons    = {"a","b","x","y","l1","r1","select","start","home","l3","r3"};
-    float                    stickSelectThreshold   = 0.85f;    // normalized [0,1] — "al tope"
+    float                    stickSelectThreshold   = 0.85f;    // normalized [0,1]
     int                      stickHoldMs            = 2000;     // ms held at tope to select direction
 };
 

@@ -1,4 +1,5 @@
 #include "MappingEditor.h"
+#include "../config/Strings.h"
 #include "MappingHelpers.h"
 #include "ActionPanel.h"
 #include "../imgui/imgui.h"
@@ -725,7 +726,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
     }
     ImGui::Spacing();
     ImGui::SetWindowFontScale(1.35f);
-    ImGui::TextDisabled("F\xC3\xADsico");
+    ImGui::TextDisabled("%s", tr("mapper.physical"));
     ImGui::SetWindowFontScale(1.0f);
     ImGui::EndGroup();
 
@@ -803,7 +804,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
     }
     ImGui::Spacing();
     ImGui::SetWindowFontScale(1.35f);
-    ImGui::TextDisabled("Virtual (Xbox One)");
+    ImGui::TextDisabled("%s", tr("mapper.virtual"));
     ImGui::SetWindowFontScale(1.0f);
     ImGui::EndGroup();
 
@@ -1039,7 +1040,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                                        it4->second.type == HalfAxisActionType::Ranges &&
                                        !it4->second.ranges.empty());
                     if (hasRanges4) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-                    if (ImGui::Button("Rangos##axt5", { kBtnW, 0.0f })) {
+                    if (ImGui::Button(trid("btn.ranges", "axt5").c_str(), { kBtnW, 0.0f })) {
                         std::vector<RangeEdit> cur;
                         if (hasRanges4)
                             for (const auto& tr : it4->second.ranges) {
@@ -1096,18 +1097,18 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                     float panelW = 280.0f;
                     float offX2 = (availW4 - panelW) * 0.5f;
                     if (offX2 > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX2);
-                    ImGui::TextDisabled("Asigna ambas direcciones del eje");
+                    ImGui::TextDisabled("%s", tr("mapper.axis_hint"));
                     if (offX2 > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX2);
                     ImGui::SetNextItemWidth(100.0f);
-                    ImGui::SliderFloat("Vel.##axspd", &m_sel.axisMouseSpeed, 1.0f, 50.0f, "%.0f");
+                    ImGui::SliderFloat(trid("mapper.mouse_speed", "axspd").c_str(), &m_sel.axisMouseSpeed, 1.0f, 50.0f, "%.0f");
                     ImGui::SameLine();
                     const char* mouseAxes[] = { "X", "Y" };
                     int axIdx = (m_sel.axisMouseAxis == "mouse_y") ? 1 : 0;
                     ImGui::SetNextItemWidth(60.0f);
-                    if (ImGui::Combo("Eje##axax", &axIdx, mouseAxes, 2))
+                    if (ImGui::Combo(trid("mapper.mouse_axis", "axax").c_str(), &axIdx, mouseAxes, 2))
                         m_sel.axisMouseAxis = (axIdx == 1) ? "mouse_y" : "mouse_x";
                     ImGui::SameLine();
-                    if (ImGui::Button("Asignar##axmov")) {
+                    if (ImGui::Button(trid("btn.assign", "axmov").c_str())) {
                         HalfAxisAction ha;
                         ha.type = HalfAxisActionType::MouseMove;
                         ha.target = m_sel.axisMouseAxis; ha.speed = m_sel.axisMouseSpeed;
@@ -1134,7 +1135,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                     float clearW = 100.0f;
                     float offX3 = (availW4 - clearW) * 0.5f;
                     if (offX3 > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX3);
-                    if (ImGui::Button("Limpiar##axclr", { clearW, 0.0f })) {
+                    if (ImGui::Button(trid("btn.clear", "axclr").c_str(), { clearW, 0.0f })) {
                         auto it = m_model.axisActionEdits.find(axisKey);
                         bool isMouseMove = (it != m_model.axisActionEdits.end() &&
                                             it->second.type == HalfAxisActionType::MouseMove);
@@ -1188,7 +1189,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
             const std::vector<RangeEdit>& curRanges = (m_sel.triggerSrc == "l2") ? m_model.trigLRangeEdits : m_model.trigRRangeEdits;
             bool hasRanges = !curRanges.empty();
             if (hasRanges) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-            if (ImGui::Button("Rangos##h7t4", { btnW, 0.0f })) {
+            if (ImGui::Button(trid("btn.ranges", "h7t4").c_str(), { btnW, 0.0f })) {
                 m_trigRangeModal.open(m_sel.triggerSrc, curRanges);
                 m_sel.actionType = H5ActionType::Xbox;
                 m_sel.captureKeys.clear(); m_sel.macroSel.clear();
@@ -1273,7 +1274,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
-    if (ImGui::Button("Guardar##mapSave", { 120.0f, 0.0f })) {
+    if (ImGui::Button(trid("btn.save", "mapSave").c_str(), { 120.0f, 0.0f })) {
         save();
         m_active = false;
     }
@@ -1281,7 +1282,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
     ImGui::PushStyleColor(ImGuiCol_Button,        { 0.35f, 0.35f, 0.35f, 1.0f });
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.45f, 0.45f, 0.45f, 1.0f });
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  { 0.25f, 0.25f, 0.25f, 1.0f });
-    if (ImGui::Button("Cancelar##mapCancel", { 100.0f, 0.0f })) {
+    if (ImGui::Button(trid("btn.cancel", "mapCancel").c_str(), { 100.0f, 0.0f })) {
         m_sel.physComp = -1; m_sel.stickDir.clear(); m_sel.stickAsButton = false;
         m_sel.dpadDir.clear(); m_sel.triggerSrc.clear();
         m_sel.actionType = H5ActionType::Xbox;

@@ -333,6 +333,8 @@ VirtualPadConfig loadVirtualPadConfig(const std::string& path) {
         cfg.pid = static_cast<uint16_t>(std::stoul(root["virtual_pid"].get<std::string>(), nullptr, 16));
     if (root.contains("log_level"))
         cfg.logLevel = root["log_level"].get<std::string>();
+    if (root.contains("locale"))
+        cfg.locale = root["locale"].get<std::string>();
     if (root.contains("pad_configurations") && root["pad_configurations"].is_object()) {
         const auto& pc = root["pad_configurations"];
         if (pc.contains("accepted_xbox_buttons") && pc["accepted_xbox_buttons"].is_array()) {

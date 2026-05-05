@@ -1,4 +1,5 @@
 #include "BindingWizard.h"
+#include "../config/Strings.h"
 #include "../config/ConfigLoader.h"
 #include "../input/ControllerConfig.h"
 #include "../imgui/imgui.h"
@@ -100,14 +101,14 @@ void BindingWizard::render() {
 // ---------------------------------------------------------------------------
 
 void BindingWizard::renderSelectController() {
-    ImGui::SeparatorText("Emparejar mando — Selecciona el controlador");
+    ImGui::SeparatorText(tr("wizard.step_select_title"));
     ImGui::Spacing();
 
-    if (ImGui::Button("Actualizar lista")) scanControllers();
+    if (ImGui::Button(tr("btn.refresh"))) scanControllers();
     ImGui::Spacing();
 
     if (m_controllers.empty()) {
-        ImGui::TextDisabled("No se detectó ningún mando. Conecta el mando y pulsa Actualizar.");
+        ImGui::TextDisabled("%s", tr("wizard.no_ctrl"));
     } else {
         ImGui::BeginChild("##ctrlList", { 0.0f, 180.0f }, true);
         for (int i = 0; i < (int)m_controllers.size(); ++i) {
@@ -128,7 +129,7 @@ void BindingWizard::renderSelectController() {
     ImGui::Spacing();
     bool canContinue = (m_selectedCtrl >= 0 && m_selectedCtrl < (int)m_controllers.size());
     if (!canContinue) ImGui::BeginDisabled();
-    if (ImGui::Button("Continuar##selCtrl", { 140.0f, 0.0f })) {
+    if (ImGui::Button(trid("btn.continue", "selCtrl").c_str(), { 140.0f, 0.0f })) {
         const auto& c = m_controllers[m_selectedCtrl];
         strncpy_s(m_nameBuf, c.name.c_str(), sizeof(m_nameBuf) - 1);
         m_state = State::NameController;
@@ -136,7 +137,7 @@ void BindingWizard::renderSelectController() {
     if (!canContinue) ImGui::EndDisabled();
 
     ImGui::SameLine();
-    if (ImGui::Button("Cancelar##selCtrl", { 100.0f, 0.0f })) cancel();
+    if (ImGui::Button(trid("btn.cancel", "selCtrl").c_str(), { 100.0f, 0.0f })) cancel();
 }
 
 // ---------------------------------------------------------------------------
@@ -144,26 +145,26 @@ void BindingWizard::renderSelectController() {
 // ---------------------------------------------------------------------------
 
 void BindingWizard::renderNameController() {
-    ImGui::SeparatorText("Emparejar mando — Nombre y modo");
+    ImGui::SeparatorText(tr("wizard.step_name_title"));
     ImGui::Spacing();
 
     const auto& c = m_controllers[m_selectedCtrl];
 
     ImGui::Text("VID:%04X  PID:%04X", c.vid, c.pid);
     if (!c.productName.empty())
-        ImGui::Text("Nombre HID: %s", c.productName.c_str());
+        ImGui::Text(tr("wizard.hid_name"), c.productName.c_str());
     {
         const char* conn = c.connectionType == "bt"  ? "Bluetooth" :
                            c.connectionType == "usb" ? "USB" : "desconocida";
-        ImGui::Text("Conexion detectada: %s", conn);
-        ImGui::Checkbox("Mapping especifico para esta conexion", &m_saveWithConnection);
+        ImGui::Text(tr("wizard.connection"), conn);
+        ImGui::Checkbox(tr("wizard.specific_mapping"), &m_saveWithConnection);
         if (m_saveWithConnection)
-            ImGui::TextDisabled("  El mapping solo se usara cuando el mando conecte por %s.", conn);
+            ImGui::TextDisabled(tr("wizard.mapping_specific"), conn);
         else
-            ImGui::TextDisabled("  El mapping servira para USB y BT.");
+            ImGui::TextDisabled("%s", tr("wizard.mapping_generic"));
     }
     ImGui::Spacing();
-    ImGui::Text("Nombre para mostrar (editable):");
+    ImGui::Text("%s", tr("wizard.display_name"));
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::InputText("##cname", m_nameBuf, sizeof(m_nameBuf));
 
@@ -171,11 +172,11 @@ void BindingWizard::renderNameController() {
     ImGui::Separator();
     ImGui::Spacing();
 
-    if (ImGui::Button("← Atrás##name", { 100.0f, 0.0f })) m_state = State::SelectController;
+    if (ImGui::Button(trid("btn.back", "name").c_str(), { 100.0f, 0.0f })) m_state = State::SelectController;
     ImGui::SameLine();
     bool canContinue = (m_nameBuf[0] != '\0');
     if (!canContinue) ImGui::BeginDisabled();
-    if (ImGui::Button("Continuar##name", { 140.0f, 0.0f })) {
+    if (ImGui::Button(trid("btn.continue", "name").c_str(), { 140.0f, 0.0f })) {
         buildSteps();
         if (m_noStateCount > 0)
             m_state = State::WarnNoState;
@@ -187,7 +188,7 @@ void BindingWizard::renderNameController() {
     }
     if (!canContinue) ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Cancelar##name", { 100.0f, 0.0f })) cancel();
+    if (ImGui::Button(trid("btn.cancel", "name").c_str(), { 100.0f, 0.0f })) cancel();
 }
 
 // ---------------------------------------------------------------------------
@@ -195,22 +196,22 @@ void BindingWizard::renderNameController() {
 // ---------------------------------------------------------------------------
 
 void BindingWizard::renderWarnNoState() {
-    ImGui::SeparatorText("Emparejar mando — Aviso");
+    ImGui::SeparatorText(tr("wizard.step_warn_title"));
     ImGui::Spacing();
     ImGui::TextColored({ 1.0f, 0.8f, 0.2f, 1.0f },
-        "%d componente(s) no tienen entrada en state_map y serán ignorados.",
+        tr("wizard.warn_count"),
         m_noStateCount);
     ImGui::Spacing();
-    ImGui::TextWrapped("Puedes continuar igualmente. Los componentes ignorados no se asignarán al mando.");
+    ImGui::TextWrapped("%s", tr("wizard.warn_hint"));
     ImGui::Spacing();
 
-    if (ImGui::Button("Continuar##warn", { 140.0f, 0.0f })) {
+    if (ImGui::Button(trid("btn.continue", "warn").c_str(), { 140.0f, 0.0f })) {
         m_state = State::Binding;
         openReader();
         beginStep();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Cancelar##warn", { 100.0f, 0.0f })) cancel();
+    if (ImGui::Button(trid("btn.cancel", "warn").c_str(), { 100.0f, 0.0f })) cancel();
 }
 
 // ---------------------------------------------------------------------------
@@ -239,8 +240,8 @@ void BindingWizard::renderBinding() {
     ImGui::BeginChild("##wizRight", { rightW, 0.0f }, true);
 
     // Progress
-    ImGui::SeparatorText("Emparejando mando");
-    ImGui::Text("Paso %d / %d", m_currentStep + 1, (int)m_steps.size());
+    ImGui::SeparatorText(tr("wizard.step_bind_title"));
+    ImGui::Text(tr("wizard.step"), m_currentStep + 1, (int)m_steps.size());
     ImGui::Spacing();
 
     if (m_currentStep < (int)m_steps.size()) {
@@ -249,7 +250,7 @@ void BindingWizard::renderBinding() {
 
         // Component label
         if (step.compIndex >= 0 && step.compIndex < (int)m_layout.components.size())
-            ImGui::Text("Componente: %s", m_layout.components[step.compIndex].id.c_str());
+            ImGui::Text(tr("wizard.component"), m_layout.components[step.compIndex].id.c_str());
 
         ImGui::Spacing();
 
@@ -295,12 +296,12 @@ void BindingWizard::renderBinding() {
 
         // ── Manual controls ──────────────────────────────────────────────────
         if (m_currentStep == 0) ImGui::BeginDisabled();
-        if (ImGui::Button("Atras##bind", { 90.0f, 0.0f })) goBack();
+        if (ImGui::Button(trid("btn.back", "bind").c_str(), { 90.0f, 0.0f })) goBack();
         if (m_currentStep == 0) ImGui::EndDisabled();
         ImGui::SameLine();
-        if (ImGui::Button("Saltar##bind",   { 80.0f, 0.0f })) skipStep();
+        if (ImGui::Button(trid("btn.skip", "bind").c_str(), { 80.0f, 0.0f })) skipStep();
         ImGui::SameLine();
-        if (ImGui::Button("Cancelar##bind", { 90.0f, 0.0f })) cancel();
+        if (ImGui::Button(trid("btn.cancel", "bind").c_str(), { 90.0f, 0.0f })) cancel();
     }
 
     ImGui::EndChild();
@@ -325,23 +326,23 @@ void BindingWizard::renderReview() {
     ImGui::SameLine();
 
     ImGui::BeginChild("##revRight", { rightW, 0.0f }, true);
-    ImGui::SeparatorText("Resultado");
+    ImGui::SeparatorText(tr("wizard.step_review_title"));
 
-    ImGui::Text("Botones asignados: %d", (int)m_boundButtons.size());
-    ImGui::Text("Ejes asignados: %d",    (int)m_boundAxes.size());
-    if (m_hasDpad) ImGui::Text("D-pad: %s", m_dpadType.c_str());
-    else           ImGui::TextDisabled("D-pad: no asignado");
+    ImGui::Text(tr("wizard.review_buttons"), (int)m_boundButtons.size());
+    ImGui::Text(tr("wizard.review_axes"), (int)m_boundAxes.size());
+    if (m_hasDpad) ImGui::Text(tr("wizard.review_dpad"), m_dpadType.c_str());
+    else           ImGui::TextDisabled("%s", tr("wizard.review_dpad_none"));
 
     ImGui::Spacing();
     ImGui::BeginChild("##revList", { 0.0f, 180.0f }, true);
     for (const auto& b : m_boundButtons) {
         if (b.physicalOnly)
-            ImGui::Text("Btn %2d → %s (solo visual)", b.physIndex, b.physical.c_str());
+            ImGui::Text(tr("wizard.review_visual"), b.physIndex, b.physical.c_str());
         else
-            ImGui::Text("Btn %2d → %s", b.physIndex, b.physical.c_str());
+            ImGui::Text(tr("wizard.review_btn"), b.physIndex, b.physical.c_str());
     }
     for (const auto& a : m_boundAxes) {
-        ImGui::Text("%s → %s%s", a.source.c_str(), a.target.c_str(), a.invert ? " (inv)" : "");
+        ImGui::Text(tr("wizard.review_axis"), a.source.c_str(), a.target.c_str(), a.invert ? tr("wizard.review_inverted") : "");
     }
     ImGui::EndChild();
 
@@ -349,9 +350,9 @@ void BindingWizard::renderReview() {
     ImGui::Separator();
     ImGui::Spacing();
 
-    if (ImGui::Button("Guardar##rev", { 120.0f, 0.0f })) saveResult();
+    if (ImGui::Button(trid("btn.save", "rev").c_str(), { 120.0f, 0.0f })) saveResult();
     ImGui::SameLine();
-    if (ImGui::Button("Repetir##rev", { 100.0f, 0.0f })) {
+    if (ImGui::Button(trid("btn.repeat", "rev").c_str(), { 100.0f, 0.0f })) {
         closeReader();
         m_boundButtons.clear();
         m_boundAxes.clear();
@@ -366,7 +367,7 @@ void BindingWizard::renderReview() {
         m_state = State::Binding;
     }
     ImGui::SameLine();
-    if (ImGui::Button("Cancelar##rev", { 100.0f, 0.0f })) cancel();
+    if (ImGui::Button(trid("btn.cancel", "rev").c_str(), { 100.0f, 0.0f })) cancel();
 
     ImGui::EndChild();
 }

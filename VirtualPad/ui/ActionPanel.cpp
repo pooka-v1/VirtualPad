@@ -1,4 +1,5 @@
 #include "ActionPanel.h"
+#include "../config/Strings.h"
 #include "../imgui/imgui.h"
 #include <string>
 
@@ -89,10 +90,10 @@ bool renderKeyboardCapture(const char* contextId,
 
     ImGui::PushID(contextId);
     if (empty) ImGui::BeginDisabled();
-    bool assigned = ImGui::Button("Asignar", {bAsigW, 0.0f}) && !empty;
+    bool assigned = ImGui::Button(tr("btn.assign"), {bAsigW, 0.0f}) && !empty;
     if (empty) ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Limpiar", {bLimpW, 0.0f})) keys.clear();
+    if (ImGui::Button(tr("btn.clear"), {bLimpW, 0.0f})) keys.clear();
     ImGui::PopID();
 
     return assigned;
@@ -120,7 +121,7 @@ bool renderMacroCombo(const char* contextId, std::string& sel,
     ImGui::SameLine();
     bool canA = !sel.empty();
     if (!canA) ImGui::BeginDisabled();
-    bool result = ImGui::Button("Asignar", {80.0f, 0.0f}) && canA;
+    bool result = ImGui::Button(tr("btn.assign"), {80.0f, 0.0f}) && canA;
     if (!canA) ImGui::EndDisabled();
     ImGui::PopID();
 

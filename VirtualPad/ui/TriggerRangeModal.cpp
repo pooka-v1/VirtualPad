@@ -1,4 +1,5 @@
 #include "TriggerRangeModal.h"
+#include "../config/Strings.h"
 #include "ActionPanel.h"
 #include "../imgui/imgui.h"
 #include "../nlohmann/json.hpp"
@@ -26,13 +27,13 @@ void TriggerRangeModal::open(const std::string& trigger, const std::vector<Range
 // ---------------------------------------------------------------------------
 bool TriggerRangeModal::render() {
     if (!m_open) return false;
-    ImGui::OpenPopup("Rangos de gatillo##rangosModal");
+    ImGui::OpenPopup(trid("ranges.title", "rangosModal").c_str());
 
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, { 0.5f, 0.5f });
     ImGui::SetNextWindowSize({ 600.0f, 0.0f });
 
-    if (!ImGui::BeginPopupModal("Rangos de gatillo##rangosModal", nullptr,
+    if (!ImGui::BeginPopupModal(trid("ranges.title", "rangosModal").c_str(), nullptr,
                                 ImGuiWindowFlags_AlwaysAutoResize)) return false;
 
     struct XboxChoice { const char* display; const char* name; };
@@ -122,7 +123,7 @@ bool TriggerRangeModal::render() {
         int n = (int)m_work.size();
         bool canAdd = (n < 10);
         if (!canAdd) ImGui::BeginDisabled();
-        if (ImGui::Button(n == 1 ? "Partici\xC3\xB3n (crear 2 zonas)" : "Partici\xC3\xB3n (a\xC3\xB1\xC3\xA1\xC4\x80\xC3\xBDir zona)", { 0.0f, 0.0f })) {
+        if (ImGui::Button(n == 1 ? tr("ranges.split_create") : tr("ranges.split_add"), { 0.0f, 0.0f })) {
             int newN = n + 1;
             m_work.clear();
             for (int i = 0; i < newN; ++i) {
@@ -139,7 +140,7 @@ bool TriggerRangeModal::render() {
         ImGui::SameLine();
         bool canRemove = (n > 1);
         if (!canRemove) ImGui::BeginDisabled();
-        if (ImGui::Button("Quitar zona##rangeRm", { 0.0f, 0.0f }) && canRemove && m_selSect >= 0) {
+        if (ImGui::Button(trid("ranges.remove", "rangeRm").c_str(), { 0.0f, 0.0f }) && canRemove && m_selSect >= 0) {
             m_work.erase(m_work.begin() + m_selSect);
             int newN = (int)m_work.size();
             for (int i = 0; i < newN; ++i) {
@@ -152,14 +153,14 @@ bool TriggerRangeModal::render() {
         if (!canRemove) ImGui::EndDisabled();
         ImGui::SameLine();
         if (m_selSect >= 0 && m_work[m_selSect].hasAction) {
-            if (ImGui::Button("Borrar acci\xC3\xB3n##rangeClear")) {
+            if (ImGui::Button(trid("ranges.clear_action", "rangeClear").c_str())) {
                 m_work[m_selSect].hasAction = false;
                 m_work[m_selSect].action = ButtonAction{};
                 m_actType = H5ActionType::Xbox; m_captureKeys.clear();
             }
         }
         ImGui::SameLine();
-        ImGui::TextDisabled("(%d/10 zonas)", (int)m_work.size());
+        ImGui::TextDisabled(tr("ranges.count"), (int)m_work.size());
     }
 
     ImGui::Separator();
@@ -167,9 +168,9 @@ bool TriggerRangeModal::render() {
 
     // ── Panel de acción de la zona seleccionada ───────────────────────────────
     if (m_selSect < 0) {
-        ImGui::TextDisabled("Haz clic en una zona de la barra para asignarle una acci\xC3\xB3n.");
+        ImGui::TextDisabled("%s", tr("ranges.hint"));
     } else {
-        ImGui::Text("Zona %d  (%.2f \xe2\x80\x93 %.2f):",
+        ImGui::Text(tr("ranges.zone"),
                     m_selSect + 1,
                     m_work[m_selSect].from,
                     m_work[m_selSect].to);
@@ -221,7 +222,7 @@ bool TriggerRangeModal::render() {
             ImGui::SameLine();
             bool canAssign = (m_xboxSel >= 0);
             if (!canAssign) ImGui::BeginDisabled();
-            if (ImGui::Button("Asignar##rxbAssign", { 80.0f, 0.0f }) && canAssign) {
+            if (ImGui::Button(trid("btn.assign", "rxbAssign").c_str(), { 80.0f, 0.0f }) && canAssign) {
                 ButtonAction act;
                 act.type = ButtonActionType::VirtualButton;
                 act.name = kChoices[m_xboxSel].name;
@@ -268,7 +269,7 @@ bool TriggerRangeModal::render() {
                 m_captureKeys.empty()) {
                 std::string ex;
                 for (const auto& k : m_work[m_selSect].action.keys) { if (!ex.empty()) ex += "+"; ex += k; }
-                ImGui::TextDisabled("  actual: %s", ex.c_str());
+                ImGui::TextDisabled(tr("ranges.current"), ex.c_str());
             }
 
         } else if (m_actType == H5ActionType::Mouse) {
@@ -300,13 +301,13 @@ bool TriggerRangeModal::render() {
     if (btnOff > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + btnOff);
 
     bool accepted = false;
-    if (ImGui::Button("Aceptar##rangosOk", { btnW2, 0.0f })) {
+    if (ImGui::Button(trid("btn.ok", "rangosOk").c_str(), { btnW2, 0.0f })) {
         m_open = false;
         ImGui::CloseCurrentPopup();
         accepted = true;
     }
     ImGui::SameLine();
-    if (ImGui::Button("Cancelar##rangosCan", { btnW2, 0.0f })) {
+    if (ImGui::Button(trid("btn.cancel", "rangosCan").c_str(), { btnW2, 0.0f })) {
         m_open = false;
         ImGui::CloseCurrentPopup();
     }

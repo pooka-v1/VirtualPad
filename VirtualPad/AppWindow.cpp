@@ -1,4 +1,4 @@
-﻿#include "AppWindow.h"
+#include "AppWindow.h"
 #include "Log.h"
 
 #include <algorithm>
@@ -16,6 +16,7 @@ using json = nlohmann::json;
 #include "imgui/imgui_impl_win32.h"
 #include "imgui/imgui_impl_dx11.h"
 #include "ui/ActionPanel.h"
+#include "config/Strings.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -70,6 +71,7 @@ int AppWindow::run() {
         m_acceptedXboxButtons  = vpCfg.acceptedXboxButtons;
         m_stickSelectThreshold = vpCfg.stickSelectThreshold;
         m_stickHoldMs          = vpCfg.stickHoldMs;
+        Strings::load(vpCfg.locale);
     } catch (...) {}  // struct defaults apply if file is missing or malformed
 
     try { m_padLayouts = loadPadLayouts("data/pad_layouts.json"); } catch (...) {}
@@ -170,10 +172,10 @@ void AppWindow::renderFrame() {
         ImGuiWindowFlags_NoBringToFrontOnFocus);
 
     if (ImGui::BeginTabBar("MainTabs")) {
-        if (ImGui::BeginTabItem("Engine"))  { renderEngineTab();  ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("Scanner")) { renderScannerTab(); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("Pads"))    { renderPadsTab();    ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("Layout"))  { renderLayoutTab();  ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(tr("tab.engine")))  { renderEngineTab();  ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(tr("tab.scanner"))) { renderScannerTab(); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(tr("tab.pads")))    { renderPadsTab();    ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(tr("tab.layout")))  { renderLayoutTab();  ImGui::EndTabItem(); }
         ImGui::EndTabBar();
     }
 
@@ -193,25 +195,25 @@ void AppWindow::renderEngineTab() {
 
     // â"€â"€ Status indicator â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     if (connected) {
-        ImGui::TextColored({ 0.3f, 1.0f, 0.3f, 1.0f }, "â—");
+        ImGui::TextColored({ 0.3f, 1.0f, 0.3f, 1.0f }, "\xe2\x97\x8f");
         ImGui::SameLine();
-        ImGui::Text("Connected - %s", m_engine.getDevice().c_str());
+        ImGui::Text(tr("engine.connected"), m_engine.getDevice().c_str());
     } else if (phase == EnginePhase::WaitingSelection) {
-        ImGui::TextColored({ 1.0f, 0.8f, 0.0f, 1.0f }, "â—");
+        ImGui::TextColored({ 1.0f, 0.8f, 0.0f, 1.0f }, "\xe2\x97\x8f");
         ImGui::SameLine();
-        ImGui::Text("Select a controller:");
+        ImGui::Text("%s", tr("engine.select_ctrl"));
     } else if (running) {
-        ImGui::TextColored({ 1.0f, 0.8f, 0.0f, 1.0f }, "â—");
+        ImGui::TextColored({ 1.0f, 0.8f, 0.0f, 1.0f }, "\xe2\x97\x8f");
         ImGui::SameLine();
-        ImGui::Text("Waiting for device...");
+        ImGui::Text("%s", tr("engine.waiting"));
     } else {
-        ImGui::TextColored({ 1.0f, 0.3f, 0.3f, 1.0f }, "â—");
+        ImGui::TextColored({ 1.0f, 0.3f, 0.3f, 1.0f }, "\xe2\x97\x8f");
         ImGui::SameLine();
-        ImGui::Text("Engine stopped");
+        ImGui::Text("%s", tr("engine.stopped"));
     }
 
     ImGui::Spacing();
-    ImGui::TextDisabled("Status: %s", m_engine.getStatus().c_str());
+    ImGui::TextDisabled(tr("engine.status"), m_engine.getStatus().c_str());
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
@@ -228,7 +230,7 @@ void AppWindow::renderEngineTab() {
         ? candidates : availableDevices;
 
     if (displayList.empty()) {
-        ImGui::TextDisabled("  No controllers detected");
+        ImGui::TextDisabled("%s", tr("engine.no_ctrl"));
     } else {
         for (int i = 0; i < (int)displayList.size(); ++i) {
             const auto& dev = displayList[i];
@@ -249,7 +251,7 @@ void AppWindow::renderEngineTab() {
                 ImGui::SameLine();
 
                 char btnLabel[64];
-                snprintf(btnLabel, sizeof(btnLabel), "Activar##dev%d", i);
+                snprintf(btnLabel, sizeof(btnLabel), "%s##dev%d", tr("btn.activate"), i);
 
                 if (phase == EnginePhase::WaitingSelection) {
                     if (ImGui::SmallButton(btnLabel))
@@ -271,7 +273,7 @@ void AppWindow::renderEngineTab() {
     ImGui::Spacing();
 
     // â"€â"€ Game profile selector â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-    ImGui::Text("Game profile:");
+    ImGui::Text("%s", tr("engine.profile"));
     ImGui::SameLine();
 
     std::vector<const char*> profileItems;
@@ -290,17 +292,17 @@ void AppWindow::renderEngineTab() {
     std::string activeName = m_engine.getActiveProfileName();
     if (!activeName.empty()) {
         ImGui::SameLine();
-        ImGui::TextColored({ 0.4f, 0.9f, 0.4f, 1.0f }, "(active: %s)", activeName.c_str());
+        ImGui::TextColored({ 0.4f, 0.9f, 0.4f, 1.0f }, tr("engine.profile_active"), activeName.c_str());
     } else if (connected && m_profileSelected != 0) {
         ImGui::SameLine();
-        ImGui::TextDisabled("(reconnect to apply)");
+        ImGui::TextDisabled("%s", tr("engine.reconnect"));
     }
 
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
-    ImGui::TextDisabled("Console window shows full log output.");
-    ImGui::TextDisabled("Close this window to exit.");
+    ImGui::TextDisabled("%s", tr("engine.console_hint"));
+    ImGui::TextDisabled("%s", tr("engine.close_hint"));
 }
 
 // ---------------------------------------------------------------------------
@@ -432,13 +434,13 @@ void AppWindow::renderScannerTab() {
 
     ImGui::Text("HID(% zu)", m_hidDevices.size());
     ImGui::SameLine();
-    if (ImGui::SmallButton("Refresh"))
+    if (ImGui::SmallButton(tr("btn.refresh")))
         kickHidScan();
     ImGui::Separator();
 
     if (m_hidDevices.empty()) {
         ImGui::Spacing();
-        ImGui::TextDisabled("No HID devices found.");
+        ImGui::TextDisabled("%s", tr("scanner.no_devices"));
     } else {
         for (int i = 0; i < (int)m_hidDevices.size(); ++i) {
             const auto& dev = m_hidDevices[i];
@@ -478,7 +480,7 @@ void AppWindow::renderScannerTab() {
     if (m_hidSelected < 0 || m_hidSelected >= (int)m_hidDevices.size()) {
         if (m_scanDevice) { m_scanDevice.reset(); m_scanRawState = {}; m_scanDeviceIdx = -1; }
         ImGui::Spacing();
-        ImGui::TextDisabled("Select a HID device on the left to monitor its inputs.");
+        ImGui::TextDisabled("%s", tr("scanner.hint"));
         ImGui::EndChild();
         return;
     }
@@ -512,19 +514,19 @@ void AppWindow::renderScannerTab() {
 
     // Header
     ImGui::Spacing();
-    ImGui::Text("%s", hdev.productName.empty() ? "HID Device" : hdev.productName.c_str());
+    ImGui::Text("%s", hdev.productName.empty() ? tr("scanner.default_name") : hdev.productName.c_str());
     ImGui::SameLine();
     ImGui::TextDisabled("VID: % 04X PID : % 04X", hdev.vid, hdev.pid);
     if (cfg)
         ImGui::TextColored({ 0.3f, 1.0f, 0.3f, 1.0f }, "Config: %s", cfg->source_name.c_str());
     else {
-        ImGui::TextColored({ 1.0f, 0.8f, 0.0f, 1.0f }, "No config");
+        ImGui::TextColored({ 1.0f, 0.8f, 0.0f, 1.0f }, "%s", tr("scanner.no_config"));
         ImGui::TextDisabled("Add to controllers.json: vid \"%04X\" pid \"%04X\" mode \"hid\"",
                             hdev.vid, hdev.pid);
     }
     if (!m_scanDevice || !m_scanDevice->isOpen()) {
         ImGui::Spacing();
-        ImGui::TextColored({ 1.0f, 0.4f, 0.4f, 1.0f }, "Disconnected");
+        ImGui::TextColored({ 1.0f, 0.4f, 0.4f, 1.0f }, "%s", tr("scanner.disconnected"));
         ImGui::EndChild();
         return;
     }
@@ -535,7 +537,7 @@ void AppWindow::renderScannerTab() {
     const float barW = ImGui::GetContentRegionAvail().x - 60.0f;
 
     // Buttons — raw HID button numbers 1-32
-    ImGui::Text("Buttons");
+    ImGui::Text("%s", tr("scanner.buttons"));
     ImGui::Separator();
     ImGui::Spacing();
     for (int i = 0; i < 32; ++i) {
@@ -553,7 +555,7 @@ void AppWindow::renderScannerTab() {
     // Axes — raw HID axis values [-1, 1]
     ImGui::Spacing();
     ImGui::Spacing();
-    ImGui::Text("Axes");
+    ImGui::Text("%s", tr("scanner.axes"));
     ImGui::Separator();
     ImGui::Spacing();
     struct { const char* name; float v; } axes[] = {
@@ -580,7 +582,7 @@ void AppWindow::renderScannerTab() {
     // Hat switch — raw hat value → compass widget
     ImGui::Spacing();
     ImGui::Spacing();
-    ImGui::Text("Hat");
+    ImGui::Text("%s", tr("scanner.hat"));
     ImGui::Separator();
     ImGui::Spacing();
     DWORD pov = JOY_POVCENTERED;
@@ -773,7 +775,7 @@ void AppWindow::renderPadsTab() {
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
-        if (ImGui::Button("Mapear##openMapping", { 120.0f, 0.0f })) {
+        if (ImGui::Button(trid("mapper.title", "openMapping").c_str(), { 120.0f, 0.0f })) {
             m_mappingEditor.setConfigs(m_controllerConfigs);
             m_mappingEditor.activate();
         }
