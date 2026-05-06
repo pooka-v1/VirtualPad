@@ -1,4 +1,5 @@
 #include "PadView.h"
+#include "../config/Strings.h"
 
 #include <wincodec.h>
 #include <unordered_set>
@@ -254,7 +255,7 @@ int PadView::hitTest(ImVec2 mousePos, ImVec2 origin) const {
 
 void PadView::render(const GamepadState& state, int selectedComp) {
     if (!m_loaded) {
-        ImGui::TextDisabled("Assets not loaded.");
+        ImGui::TextDisabled("%s", tr("padview.assets_not_loaded"));
         return;
     }
 

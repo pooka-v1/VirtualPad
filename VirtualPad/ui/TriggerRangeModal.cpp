@@ -13,7 +13,7 @@ void TriggerRangeModal::open(const std::string& trigger, const std::vector<Range
     m_forKey = trigger;
     m_work       = current;
     m_selSect    = -1;
-    m_actType    = H5ActionType::Xbox;
+    m_actType    = ActionType::Xbox;
     m_captureKeys.clear();
     m_macroSel.clear();
     m_xboxSel    = -1;
@@ -27,34 +27,34 @@ void TriggerRangeModal::open(const std::string& trigger, const std::vector<Range
 // ---------------------------------------------------------------------------
 bool TriggerRangeModal::render() {
     if (!m_open) return false;
-    ImGui::OpenPopup(trid("ranges.title", "rangosModal").c_str());
+    ImGui::OpenPopup(trid("ranges.title", "rangesModal").c_str());
 
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, { 0.5f, 0.5f });
     ImGui::SetNextWindowSize({ 600.0f, 0.0f });
 
-    if (!ImGui::BeginPopupModal(trid("ranges.title", "rangosModal").c_str(), nullptr,
+    if (!ImGui::BeginPopupModal(trid("ranges.title", "rangesModal").c_str(), nullptr,
                                 ImGuiWindowFlags_AlwaysAutoResize)) return false;
 
-    struct XboxChoice { const char* display; const char* name; };
+    struct XboxChoice { const char* key; const char* name; };
     static const XboxChoice kChoices[] = {
-        {"A","a"},{"B","b"},{"X","x"},{"Y","y"},
-        {"L1","l1"},{"R1","r1"},{"Select","select"},{"Start","start"},{"Home","home"},
-        {"L3","l3"},{"R3","r3"},
-        {"Cruceta Arriba","dpad_up"},{"Cruceta Abajo","dpad_down"},
-        {"Cruceta Izq","dpad_left"},{"Cruceta Der","dpad_right"},
-        {"L Arriba","left_y_pos"},{"L Abajo","left_y_neg"},
-        {"L Derecha","left_x_pos"},{"L Izquierda","left_x_neg"},
-        {"R Arriba","right_y_pos"},{"R Abajo","right_y_neg"},
-        {"R Derecha","right_x_pos"},{"R Izquierda","right_x_neg"},
+        {"pad.btn_a","a"},{"pad.btn_b","b"},{"pad.btn_x","x"},{"pad.btn_y","y"},
+        {"pad.btn_l1","l1"},{"pad.btn_r1","r1"},{"pad.btn_select","select"},{"pad.btn_start","start"},{"pad.btn_home","home"},
+        {"pad.btn_l3","l3"},{"pad.btn_r3","r3"},
+        {"pad.dpad_up","dpad_up"},{"pad.dpad_down","dpad_down"},
+        {"pad.dpad_left","dpad_left"},{"pad.dpad_right","dpad_right"},
+        {"pad.left_y_pos","left_y_pos"},{"pad.left_y_neg","left_y_neg"},
+        {"pad.left_x_pos","left_x_pos"},{"pad.left_x_neg","left_x_neg"},
+        {"pad.right_y_pos","right_y_pos"},{"pad.right_y_neg","right_y_neg"},
+        {"pad.right_x_pos","right_x_pos"},{"pad.right_x_neg","right_x_neg"},
     };
     static const int kNChoices = 23;
 
-    std::string hdrStr = m_forKey + "  \xe2\x86\x92  Zonas de recorrido";
+    std::string hdrStr = m_forKey + "  \xe2\x86\x92  " + tr("action.ranges_header");
     ImGui::TextColored({ 1.0f, 0.86f, 0.0f, 1.0f }, "%s", hdrStr.c_str());
     ImGui::Spacing();
 
-    // ── Barra visual de rangos ────────────────────────────────────────────────
+    // ── Range bar ────────────────────────────────────────────────────────────
     {
         int n = (int)m_work.size();
         float barW  = ImGui::GetContentRegionAvail().x - 4.0f;
@@ -96,15 +96,15 @@ bool TriggerRangeModal::render() {
             for (int i = 0; i < n; ++i) {
                 if (trigPos >= m_work[i].from && trigPos <= m_work[i].to) {
                     m_selSect = (m_selSect == i) ? -1 : i;
-                    m_actType = H5ActionType::Xbox;
+                    m_actType = ActionType::Xbox;
                     m_captureKeys.clear(); m_macroSel.clear(); m_xboxSel = -1;
                     if (m_selSect >= 0 && m_work[i].hasAction) {
                         const auto& act = m_work[i].action;
-                        if (act.type == ButtonActionType::Macro)           m_actType = H5ActionType::Macro;
-                        else if (act.type == ButtonActionType::Keyboard)   m_actType = H5ActionType::Keyboard;
-                        else if (act.type == ButtonActionType::MouseClick) m_actType = H5ActionType::Mouse;
+                        if (act.type == ButtonActionType::Macro)           m_actType = ActionType::Macro;
+                        else if (act.type == ButtonActionType::Keyboard)   m_actType = ActionType::Keyboard;
+                        else if (act.type == ButtonActionType::MouseClick) m_actType = ActionType::Mouse;
                         else {
-                            m_actType = H5ActionType::Xbox;
+                            m_actType = ActionType::Xbox;
                             if (act.type == ButtonActionType::VirtualButton) {
                                 for (int ci = 0; ci < kNChoices; ++ci)
                                     if (act.name == kChoices[ci].name) { m_xboxSel = ci; break; }
@@ -133,7 +133,7 @@ bool TriggerRangeModal::render() {
                 if (i == newN - 1) re.to = 1.0f;
                 m_work.push_back(re);
             }
-            m_selSect = -1; m_actType = H5ActionType::Xbox;
+            m_selSect = -1; m_actType = ActionType::Xbox;
             m_captureKeys.clear(); m_macroSel.clear();
         }
         if (!canAdd) ImGui::EndDisabled();
@@ -156,7 +156,7 @@ bool TriggerRangeModal::render() {
             if (ImGui::Button(trid("ranges.clear_action", "rangeClear").c_str())) {
                 m_work[m_selSect].hasAction = false;
                 m_work[m_selSect].action = ButtonAction{};
-                m_actType = H5ActionType::Xbox; m_captureKeys.clear();
+                m_actType = ActionType::Xbox; m_captureKeys.clear();
             }
         }
         ImGui::SameLine();
@@ -181,40 +181,45 @@ bool TriggerRangeModal::render() {
         float totalBtnW = bW * 4 + sp * 3;
         float offBX = (ImGui::GetContentRegionAvail().x - totalBtnW) * 0.5f;
         if (offBX > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offBX);
-        auto rTypeBtn = [&](const char* lbl, H5ActionType t) {
+        auto rTypeBtn = [&](const char* lbl, ActionType t) {
             bool sel = (m_actType == t);
             if (sel) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
             if (ImGui::Button(lbl, { bW, 0.0f })) { m_actType = t; m_captureKeys.clear(); m_macroSel.clear(); m_xboxSel = -1; }
             if (sel) ImGui::PopStyleColor();
         };
-        rTypeBtn("Mando##rt0",   H5ActionType::Xbox);    ImGui::SameLine();
-        rTypeBtn("Macro##rt1",   H5ActionType::Macro);   ImGui::SameLine();
-        rTypeBtn("Teclado##rt2", H5ActionType::Keyboard); ImGui::SameLine();
-        rTypeBtn("Rat\xC3\xB3n##rt3", H5ActionType::Mouse);
+        char lbl0[64], lbl1[64], lbl2[64], lbl3[64];
+        snprintf(lbl0, sizeof(lbl0), "%s##rt0", tr("action.type_gamepad"));
+        snprintf(lbl1, sizeof(lbl1), "%s##rt1", tr("action.type_macro"));
+        snprintf(lbl2, sizeof(lbl2), "%s##rt2", tr("action.type_keyboard"));
+        snprintf(lbl3, sizeof(lbl3), "%s##rt3", tr("action.type_mouse"));
+        rTypeBtn(lbl0, ActionType::Xbox);     ImGui::SameLine();
+        rTypeBtn(lbl1, ActionType::Macro);    ImGui::SameLine();
+        rTypeBtn(lbl2, ActionType::Keyboard); ImGui::SameLine();
+        rTypeBtn(lbl3, ActionType::Mouse);
 
         ImGui::Spacing();
 
-        if (m_actType == H5ActionType::Xbox) {
+        if (m_actType == ActionType::Xbox) {
             float cW = 220.0f;
             float cOff = (ImGui::GetContentRegionAvail().x - cW - sp - 80.0f) * 0.5f;
             if (cOff > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + cOff);
             ImGui::SetNextItemWidth(cW);
             const char* preview = (m_xboxSel >= 0 && m_xboxSel < kNChoices)
-                ? kChoices[m_xboxSel].display
-                : "-- elige bot\xC3\xB3n --";
+                ? tr(kChoices[m_xboxSel].key)
+                : tr("action.pick_button");
             if (m_xboxSel < 0 && m_work[m_selSect].hasAction) {
                 const auto& act = m_work[m_selSect].action;
                 if (act.type == ButtonActionType::VirtualButton) {
                     for (int ci = 0; ci < kNChoices; ++ci) {
                         if (act.name == kChoices[ci].name) { m_xboxSel = ci; break; }
                     }
-                    if (m_xboxSel >= 0) preview = kChoices[m_xboxSel].display;
+                    if (m_xboxSel >= 0) preview = tr(kChoices[m_xboxSel].key);
                 }
             }
             if (ImGui::BeginCombo("##rangesXbox", preview)) {
                 for (int ci = 0; ci < kNChoices; ++ci) {
                     bool sel = (m_xboxSel == ci);
-                    if (ImGui::Selectable(kChoices[ci].display, sel)) m_xboxSel = ci;
+                    if (ImGui::Selectable(tr(kChoices[ci].key), sel)) m_xboxSel = ci;
                     if (sel) ImGui::SetItemDefaultFocus();
                 }
                 ImGui::EndCombo();
@@ -237,7 +242,7 @@ bool TriggerRangeModal::render() {
                     m_work[m_selSect].action.name.c_str());
             }
 
-        } else if (m_actType == H5ActionType::Macro) {
+        } else if (m_actType == ActionType::Macro) {
             if (!m_macroNamesLoaded) {
                 m_macroNames.clear();
                 try {
@@ -254,7 +259,7 @@ bool TriggerRangeModal::render() {
                 m_work[m_selSect].hasAction = true;
             }
 
-        } else if (m_actType == H5ActionType::Keyboard) {
+        } else if (m_actType == ActionType::Keyboard) {
             if (ActionPanel::renderKeyboardCapture("kb_rng", m_captureKeys,
                                                    ImGui::GetContentRegionAvail().x, true)) {
                 ButtonAction act;
@@ -272,7 +277,7 @@ bool TriggerRangeModal::render() {
                 ImGui::TextDisabled(tr("ranges.current"), ex.c_str());
             }
 
-        } else if (m_actType == H5ActionType::Mouse) {
+        } else if (m_actType == ActionType::Mouse) {
             std::string mbResult;
             if (ActionPanel::renderMouseButtons("mb_rng", mbResult,
                                                 ImGui::GetContentRegionAvail().x)) {
@@ -301,13 +306,13 @@ bool TriggerRangeModal::render() {
     if (btnOff > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + btnOff);
 
     bool accepted = false;
-    if (ImGui::Button(trid("btn.ok", "rangosOk").c_str(), { btnW2, 0.0f })) {
+    if (ImGui::Button(trid("btn.ok", "rangesOk").c_str(), { btnW2, 0.0f })) {
         m_open = false;
         ImGui::CloseCurrentPopup();
         accepted = true;
     }
     ImGui::SameLine();
-    if (ImGui::Button(trid("btn.cancel", "rangosCan").c_str(), { btnW2, 0.0f })) {
+    if (ImGui::Button(trid("btn.cancel", "rangesCan").c_str(), { btnW2, 0.0f })) {
         m_open = false;
         ImGui::CloseCurrentPopup();
     }

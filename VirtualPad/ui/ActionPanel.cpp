@@ -75,7 +75,7 @@ bool renderKeyboardCapture(const char* contextId,
     // Build display string
     std::string dispStr;
     for (const auto& p : keys) { if (!dispStr.empty()) dispStr += " + "; dispStr += p.second; }
-    if (dispStr.empty()) dispStr = "(pulsa teclas...)";
+    if (dispStr.empty()) dispStr = tr("action.press_keys");
 
     // Center the row: [text] [Asignar] [Limpiar]
     float bAsigW = 100.0f, bLimpW = 80.0f;
@@ -109,7 +109,7 @@ bool renderMacroCombo(const char* contextId, std::string& sel,
 
     ImGui::PushID(contextId);
     ImGui::SetNextItemWidth(comboW);
-    const char* preview = sel.empty() ? "-- elige macro --" : sel.c_str();
+    const char* preview = sel.empty() ? tr("action.pick_macro") : sel.c_str();
     if (ImGui::BeginCombo("##combo", preview)) {
         for (const auto& name : names) {
             bool selected = (name == sel);
@@ -130,12 +130,12 @@ bool renderMacroCombo(const char* contextId, std::string& sel,
 
 // ---------------------------------------------------------------------------
 bool renderMouseButtons(const char* contextId, std::string& result, float availW) {
-    static const struct { const char* label; const char* name; } kBtns[] = {
-        {"Izq",                    "left"},
-        {"Der",                    "right"},
-        {"Centro",                 "middle"},
-        {"Atr\xC3\xA1s",          "x1"},
-        {"Adelante",               "x2"},
+    static const struct { const char* key; const char* name; } kBtns[] = {
+        {"action.mouse_left",    "left"},
+        {"action.mouse_right",   "right"},
+        {"action.mouse_middle",  "middle"},
+        {"action.mouse_back",    "x1"},
+        {"action.mouse_forward", "x2"},
     };
     constexpr int kN = 5;
     float btnW  = 80.0f;
@@ -146,7 +146,7 @@ bool renderMouseButtons(const char* contextId, std::string& result, float availW
     ImGui::PushID(contextId);
     for (int i = 0; i < kN; ++i) {
         if (i > 0) ImGui::SameLine();
-        if (ImGui::Button(kBtns[i].label, {btnW, 0.0f})) {
+        if (ImGui::Button(tr(kBtns[i].key), {btnW, 0.0f})) {
             result = kBtns[i].name;
             ImGui::PopID();
             return true;

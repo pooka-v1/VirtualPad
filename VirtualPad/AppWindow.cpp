@@ -279,7 +279,7 @@ void AppWindow::renderEngineTab() {
     ImGui::SameLine();
 
     std::vector<const char*> profileItems;
-    profileItems.push_back("(none)");
+    profileItems.push_back(tr("engine.no_profile"));
     for (const auto& n : m_profileNames)
         profileItems.push_back(n.c_str());
 
@@ -802,7 +802,7 @@ void AppWindow::renderLayoutTab() {
 
     if (m_layoutsFromBackup) {
         ImGui::TextColored({ 1.0f, 0.7f, 0.1f, 1.0f },
-            "AVISO: pad_layouts.json fallo al cargar. Usando copia de seguridad (.bak).");
+            "%s", tr("layout.backup_warning"));
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
@@ -813,6 +813,7 @@ void AppWindow::renderLayoutTab() {
     if (m_layoutEditor.pollControllersSaved()) {
         m_controllerConfigs = loadControllerConfigs("data/controllers.json");
         m_engine.reloadConfigs();
+        m_forceLayoutReload = true;
     }
 
     if (m_layoutEditor.pollLayoutSaved()) {

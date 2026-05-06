@@ -24,6 +24,15 @@ static const char* kStateGroups[][16] = {
 };
 static const int kGroupCount = (int)(sizeof(kStateGroups) / sizeof(kStateGroups[0]));
 
+static const char* kStateGroupKeys[] = {
+    "layout.state_group_face",
+    "layout.state_group_shoulder",
+    "layout.state_group_extras",
+    "layout.state_group_dpad",
+    "layout.state_group_axes",
+    "layout.state_group_gyro",
+};
+
 static bool isKnownState(const std::string& s) {
     if (s.empty()) return true;
     for (int g = 0; g < kGroupCount; ++g)
@@ -265,12 +274,12 @@ void LayoutEditor::renderCanvas() {
     dl->AddRectFilled(frontTL, frontBR, IM_COL32(38, 38, 55, 255));
     dl->AddRect      (frontTL, frontBR, IM_COL32(70, 70, 120, 180), 0.0f, 0, 1.0f);
     dl->AddText      ({ frontTL.x + 4.0f, frontTL.y + 3.0f },
-                      IM_COL32(90, 90, 140, 200), "FRONT");
+                      IM_COL32(90, 90, 140, 200), tr("layout.zone_front"));
 
     dl->AddRectFilled(topTL, topBR, IM_COL32(33, 42, 38, 255));
     dl->AddRect      (topTL, topBR, IM_COL32(60, 100, 70, 180), 0.0f, 0, 1.0f);
     dl->AddText      ({ topTL.x + 4.0f, topTL.y + 3.0f },
-                      IM_COL32(80, 120, 90, 200), "TOP");
+                      IM_COL32(80, 120, 90, 200), tr("layout.zone_top"));
 
     // Render components
     m_canvasView.render(m_emptyState, m_selectedComp);
@@ -392,7 +401,7 @@ void LayoutEditor::renderRightPanel(float w) {
         char inputId[32];
         snprintf(inputId, sizeof(inputId), "##idinput_%d", m_selectedComp);
 
-        const char* preview = c.id.empty() ? "(sin ID)" : c.id.c_str();
+        const char* preview = c.id.empty() ? tr("action.no_id") : c.id.c_str();
         if (ImGui::BeginCombo(comboId, preview)) {
             for (int i = 0; sugg[i]; ++i) {
                 bool sel = (c.id == sugg[i]);
@@ -910,7 +919,7 @@ bool LayoutEditor::stateCombo(const char* label, std::string& value) {
         ImGui::Separator();
 
         for (int g = 0; g < kGroupCount; ++g) {
-            ImGui::TextDisabled("%s", kStateGroups[g][0]);  // group header
+            ImGui::TextDisabled("%s", tr(kStateGroupKeys[g]));
             for (int i = 1; kStateGroups[g][i]; ++i) {
                 const char* s   = kStateGroups[g][i];
                 bool         sel = (value == s);

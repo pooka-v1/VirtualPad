@@ -180,7 +180,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                                 m_sel.physComp      = activeComp;
                                 m_sel.stickAsButton = activeIsStickBtn;
                                 m_sel.dpadDir       = activeDpadDir;
-                                m_sel.actionType    = H5ActionType::Xbox;
+                                m_sel.actionType    = ActionType::Xbox;
                                 m_sel.h9HoldComp    = -1;
                                 m_sel.h9HoldDpadDir.clear();
                                 m_sel.h9HoldTimer   = 0.0f;
@@ -201,7 +201,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                                 m_sel.h9HoldTriggerTimer += dt;
                                 if (m_sel.h9HoldTriggerTimer >= 2.0f) {
                                     m_sel.triggerSrc         = tSrc;
-                                    m_sel.actionType         = H5ActionType::Xbox;
+                                    m_sel.actionType         = ActionType::Xbox;
                                     m_sel.captureKeys.clear();
                                     m_sel.macroSel.clear();
                                     m_sel.h9HoldTriggerSrc.clear();
@@ -215,7 +215,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                     }
                 }
             }
-        } else if (m_sel.physComp >= 0 && m_sel.actionType == H5ActionType::Xbox) {
+        } else if (m_sel.physComp >= 0 && m_sel.actionType == ActionType::Xbox) {
             // Paso 2 (solo modo Xbox): detectar rising edge → asignar botón virtual
             const PadComponent& selComp2 = physComps[m_sel.physComp];
             std::string selState;
@@ -289,7 +289,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                         m_sel.flashPhysArrowDir  = m_sel.stickDir;
                         if (m_sel.flashTimer < 1.0f) m_sel.flashTimer = 1.0f;
                         m_sel.physComp = -1; m_sel.stickDir.clear();
-                        m_sel.stickAsButton = false; m_sel.actionType = H5ActionType::Xbox;
+                        m_sel.stickAsButton = false; m_sel.actionType = ActionType::Xbox;
                     } else {
                         m_sel.h9ErrorTimer = 2.0f;
                     }
@@ -310,7 +310,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                     m_sel.physComp    = -1;
                     m_sel.stickAsButton = false;
                     m_sel.dpadDir.clear();
-                    m_sel.actionType = H5ActionType::Xbox;
+                    m_sel.actionType = ActionType::Xbox;
                 } else {
                     bool hasAssignment = m_model.h5ActionEdits.count(physShort) > 0 ||
                         (m_model.buttonEdits.count(physShort) && !m_model.buttonEdits.at(physShort).empty());
@@ -320,7 +320,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                         m_sel.physComp    = -1;
                         m_sel.stickAsButton = false;
                         m_sel.dpadDir.clear();
-                        m_sel.actionType = H5ActionType::Xbox;
+                        m_sel.actionType = ActionType::Xbox;
                     } else {
                         m_sel.h9ErrorTimer = 2.0f;
                     }
@@ -358,7 +358,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                         m_sel.flashPhysArrowDir  = m_sel.stickDir;
                     }
                     m_sel.physComp = -1; m_sel.stickDir.clear();
-                    m_sel.stickAsButton = false; m_sel.actionType = H5ActionType::Xbox;
+                    m_sel.stickAsButton = false; m_sel.actionType = ActionType::Xbox;
                 };
                 auto doTrigAssign = [&](const std::string& trigTarget, const std::string& trigState) {
                     if (physShort.empty()) return;
@@ -379,7 +379,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                         m_sel.flashVirtShort = trigState;
                     }
                     m_sel.physComp = -1; m_sel.stickAsButton = false;
-                    m_sel.dpadDir.clear(); m_sel.actionType = H5ActionType::Xbox;
+                    m_sel.dpadDir.clear(); m_sel.actionType = ActionType::Xbox;
                 };
                 if (physNow.triggerL > kTrigThresh && m_sel.h9PrevPhysState.triggerL <= kTrigThresh) {
                     if (!m_sel.stickDir.empty()) doAxisTrigAssign("l2", "triggerL");
@@ -443,7 +443,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                                 m_sel.flashPhysArrowDir  = m_sel.stickDir;
                             }
                             m_sel.physComp = -1; m_sel.stickDir.clear();
-                            m_sel.stickAsButton = false; m_sel.actionType = H5ActionType::Xbox;
+                            m_sel.stickAsButton = false; m_sel.actionType = ActionType::Xbox;
                         }
                     } else {
                         auto it = m_model.buttonEdits.find(physShort);
@@ -454,12 +454,12 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                             m_model.buttonEdits[physShort] = slotKey;
                         }
                         m_sel.physComp = -1; m_sel.stickAsButton = false;
-                        m_sel.dpadDir.clear(); m_sel.actionType = H5ActionType::Xbox;
+                        m_sel.dpadDir.clear(); m_sel.actionType = ActionType::Xbox;
                     }
                     break;
                 }
             }
-        } else if (!m_sel.triggerSrc.empty() && m_sel.actionType == H5ActionType::Xbox) {
+        } else if (!m_sel.triggerSrc.empty() && m_sel.actionType == ActionType::Xbox) {
             // Paso 2 — gatillo como fuente: asignar target por botón/gatillo físico
             std::vector<std::string> candStates;
             for (int i = 0; i < (int)physComps.size(); ++i) {
@@ -495,7 +495,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                     m_sel.flashComp = findCompByState(virt.getLayout(), shortToState(vShort));
                     m_sel.flashTimer = 0.5f; m_sel.flashVirtShort = shortToState(vShort);
                 }
-                m_sel.triggerSrc.clear(); m_sel.actionType = H5ActionType::Xbox;
+                m_sel.triggerSrc.clear(); m_sel.actionType = ActionType::Xbox;
                 break;
             }
             // Virtual stick tilt → assign trigger source to a stick slot.
@@ -534,7 +534,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                         act.name = slotKey;
                         m_model.trigActionEdits[m_sel.triggerSrc] = act;
                     }
-                    m_sel.triggerSrc.clear(); m_sel.actionType = H5ActionType::Xbox;
+                    m_sel.triggerSrc.clear(); m_sel.actionType = ActionType::Xbox;
                     break;
                 }
             }
@@ -558,7 +558,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                         m_sel.flashComp = findCompByState(virt.getLayout(), trigState);
                         m_sel.flashTimer = 0.5f; m_sel.flashVirtShort = trigState;
                     }
-                    m_sel.triggerSrc.clear(); m_sel.actionType = H5ActionType::Xbox;
+                    m_sel.triggerSrc.clear(); m_sel.actionType = ActionType::Xbox;
                 };
                 if (!m_sel.triggerSrc.empty()) {
                     if (physNow.triggerL > kTrigThresh2 && m_sel.h9PrevPhysState.triggerL <= kTrigThresh2)
@@ -837,47 +837,47 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
         const char* msg;
         ImVec4      col = { 1.0f, 0.86f, 0.0f, 1.0f };
         if (m_sel.h9ErrorTimer > 0.0f) {
-            msg = "Ese bot\xC3\xB3n no tiene equivalente Xbox \xe2\x80\x94 elige otro";
+            msg = tr("mapper.hint_no_xbox");
             col = { 1.0f, 0.3f, 0.3f, 1.0f };
         } else if (m_sel.physComp < 0 && m_sel.triggerSrc.empty() && !m_sel.h9HoldTriggerSrc.empty()) {
-            msg = "Mant\xC3\xA9n el gatillo al tope para seleccionarlo como fuente";
+            msg = tr("mapper.hint_hold_trigger");
         } else if (m_sel.physComp < 0 && m_sel.triggerSrc.empty() && m_sel.h9HoldComp >= 0) {
             msg = m_sel.h9HoldStickDir.empty()
-                ? "Mant\xC3\xA9n pulsado para seleccionar"
-                : "Mant\xC3\xA9n el stick al tope para seleccionar direcci\xC3\xB3n";
+                ? tr("mapper.hint_hold_button")
+                : tr("mapper.hint_hold_stick");
         } else if (m_sel.physComp < 0 && m_sel.triggerSrc.empty()) {
-            msg = "Elige el bot\xC3\xB3n, cruceta, stick o gatillo que quieres reasignar";
+            msg = tr("mapper.hint_pick_source");
         } else if (!m_sel.triggerSrc.empty()) {
-            if (m_sel.actionType == H5ActionType::Keyboard)
+            if (m_sel.actionType == ActionType::Keyboard)
                 msg = m_sel.captureKeys.empty()
-                    ? "Pulsa las teclas del combo  (L1+R1 o A+B para cancelar)"
-                    : "Pulsa m\xC3\xA1s teclas o haz clic en Asignar";
-            else if (m_sel.actionType == H5ActionType::Xbox)
-                msg = "Haz clic en el bot\xC3\xB3n o gatillo virtual  \xe2\x80\x94  o pulsa el bot\xC3\xB3n f\xC3\xADsico";
+                    ? tr("mapper.hint_press_combo")
+                    : tr("mapper.hint_press_more");
+            else if (m_sel.actionType == ActionType::Xbox)
+                msg = tr("mapper.hint_click_virt");
             else
-                msg = "Elige la acci\xC3\xB3n del gatillo en el panel";
+                msg = tr("mapper.hint_trig_action");
         } else if (m_sel.physComp >= 0 &&
                    phys.getLayout().components[m_sel.physComp].type == "stick" &&
-                   (!m_sel.stickAsButton || m_sel.actionType == H5ActionType::Xbox)) {
+                   (!m_sel.stickAsButton || m_sel.actionType == ActionType::Xbox)) {
             if (m_sel.stickAsButton)
-                msg = "Elige en el virtual o pulsa el bot\xC3\xB3n f\xC3\xADsico que quieras asignarle";
+                msg = tr("mapper.hint_stick_btn");
             else if (!m_sel.stickDir.empty()) {
-                if (m_sel.actionType == H5ActionType::Xbox)
-                    msg = "Haz clic en el bot\xC3\xB3n, stick o cruceta virtual para asignar";
-                else if (m_sel.actionType == H5ActionType::Keyboard)
+                if (m_sel.actionType == ActionType::Xbox)
+                    msg = tr("mapper.hint_click_any");
+                else if (m_sel.actionType == ActionType::Keyboard)
                     msg = m_sel.captureKeys.empty()
-                        ? "Pulsa las teclas del combo  (L1+R1 o A+B para cancelar)"
-                        : "Pulsa m\xC3\xA1s teclas o haz clic en Asignar";
+                        ? tr("mapper.hint_press_combo")
+                        : tr("mapper.hint_press_more");
                 else
-                    msg = "Elige la acci\xC3\xB3n del semieje en el panel";
+                    msg = tr("mapper.hint_half_axis");
             } else
-                msg = "Haz clic en el stick o cruceta virtual al que quieres asignar";
-        } else if (m_sel.actionType == H5ActionType::Keyboard) {
+                msg = tr("mapper.hint_click_stick");
+        } else if (m_sel.actionType == ActionType::Keyboard) {
             msg = m_sel.captureKeys.empty()
-                ? "Pulsa las teclas del combo  (L1+R1 o A+B para cancelar)"
-                : "Pulsa m\xC3\xA1s teclas o haz clic en Asignar";
+                ? tr("mapper.hint_press_combo")
+                : tr("mapper.hint_press_more");
         } else {
-            msg = "Elige bot\xC3\xB3n, stick o cruceta en el virtual  \xe2\x80\x94  o pulsa el bot\xC3\xB3n f\xC3\xADsico";
+            msg = tr("mapper.hint_pick_target");
         }
 
         float availW = m_virtOrigin.x + virt.getLayout().W - m_physOrigin.x;
@@ -925,7 +925,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
         float offX   = (availW - totalW) * 0.5f;
         if (offX > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX);
 
-        auto typeBtn = [&](const char* label, H5ActionType type) {
+        auto typeBtn = [&](const char* label, ActionType type) {
             bool sel = (m_sel.actionType == type);
             if (sel) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
             if (ImGui::Button(label, { btnW, 0.0f })) {
@@ -934,14 +934,18 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
             }
             if (sel) ImGui::PopStyleColor();
         };
-        typeBtn("Xbox##t0",    H5ActionType::Xbox);    ImGui::SameLine();
-        typeBtn("Macro##t1",   H5ActionType::Macro);   ImGui::SameLine();
-        typeBtn("Teclado##t2", H5ActionType::Keyboard); ImGui::SameLine();
-        typeBtn("Rat\xC3\xB3n##t3",  H5ActionType::Mouse);
+        char lbT1[64], lbT2[64], lbT3[64];
+        snprintf(lbT1, sizeof(lbT1), "%s##t1", tr("action.type_macro"));
+        snprintf(lbT2, sizeof(lbT2), "%s##t2", tr("action.type_keyboard"));
+        snprintf(lbT3, sizeof(lbT3), "%s##t3", tr("action.type_mouse"));
+        typeBtn("Xbox##t0", ActionType::Xbox);    ImGui::SameLine();
+        typeBtn(lbT1,       ActionType::Macro);   ImGui::SameLine();
+        typeBtn(lbT2,       ActionType::Keyboard); ImGui::SameLine();
+        typeBtn(lbT3,       ActionType::Mouse);
 
         ImGui::Spacing();
 
-        if (m_sel.actionType == H5ActionType::Macro) {
+        if (m_sel.actionType == ActionType::Macro) {
             if (!m_macroNamesLoaded) {
                 m_macroNames.clear();
                 try {
@@ -958,13 +962,13 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                     m_model.buttonEdits.erase(physShortSel);
                 }
                 m_sel.physComp = -1; m_sel.stickAsButton = false; m_sel.dpadDir.clear();
-                m_sel.actionType = H5ActionType::Xbox; m_sel.macroSel.clear();
+                m_sel.actionType = ActionType::Xbox; m_sel.macroSel.clear();
             }
 
-        } else if (m_sel.actionType == H5ActionType::Keyboard) {
+        } else if (m_sel.actionType == ActionType::Keyboard) {
             bool cancel = (physNow.btnLB && physNow.btnRB) || (physNow.btnA && physNow.btnB);
             if (cancel) {
-                m_sel.actionType = H5ActionType::Xbox; m_sel.captureKeys.clear();
+                m_sel.actionType = ActionType::Xbox; m_sel.captureKeys.clear();
             } else if (ActionPanel::renderKeyboardCapture("kb_h5", m_sel.captureKeys, availW)) {
                 if (!physShortSel.empty()) {
                     ButtonAction act;
@@ -974,10 +978,10 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                     m_model.buttonEdits.erase(physShortSel);
                 }
                 m_sel.physComp = -1; m_sel.stickAsButton = false; m_sel.dpadDir.clear();
-                m_sel.actionType = H5ActionType::Xbox; m_sel.captureKeys.clear();
+                m_sel.actionType = ActionType::Xbox; m_sel.captureKeys.clear();
             }
 
-        } else if (m_sel.actionType == H5ActionType::Mouse) {
+        } else if (m_sel.actionType == ActionType::Mouse) {
             std::string mbResult;
             if (ActionPanel::renderMouseButtons("mb_h5", mbResult, availW)) {
                 if (!physShortSel.empty()) {
@@ -987,7 +991,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                     m_model.buttonEdits.erase(physShortSel);
                 }
                 m_sel.physComp = -1; m_sel.stickAsButton = false; m_sel.dpadDir.clear();
-                m_sel.actionType = H5ActionType::Xbox;
+                m_sel.actionType = ActionType::Xbox;
             }
         }
     } // H5 block
@@ -1023,17 +1027,23 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                 float totalW = kBtnW * 6 + ImGui::GetStyle().ItemSpacing.x * 5;
                 float offX = (availW4 - totalW) * 0.5f;
                 if (offX > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX);
-                auto typeBtn4 = [&](const char* label, H5ActionType type) {
+                auto typeBtn4 = [&](const char* label, ActionType type) {
                     bool s = (m_sel.actionType == type);
                     if (s) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
                     if (ImGui::Button(label, { kBtnW, 0.0f })) { m_sel.actionType = type; m_sel.captureKeys.clear(); }
                     if (s) ImGui::PopStyleColor();
                 };
-                typeBtn4("Mando##axt0",        H5ActionType::Xbox);      ImGui::SameLine();
-                typeBtn4("Macro##axt1",         H5ActionType::Macro);     ImGui::SameLine();
-                typeBtn4("Teclado##axt2",       H5ActionType::Keyboard);  ImGui::SameLine();
-                typeBtn4("Rat\xC3\xB3n##axt3",  H5ActionType::Mouse);     ImGui::SameLine();
-                typeBtn4("Mov.Rat\xC3\xB3n##axt4", H5ActionType::MouseMove); ImGui::SameLine();
+                char lbA0[64], lbA1[64], lbA2[64], lbA3[64], lbA4[64];
+                snprintf(lbA0, sizeof(lbA0), "%s##axt0", tr("action.type_gamepad"));
+                snprintf(lbA1, sizeof(lbA1), "%s##axt1", tr("action.type_macro"));
+                snprintf(lbA2, sizeof(lbA2), "%s##axt2", tr("action.type_keyboard"));
+                snprintf(lbA3, sizeof(lbA3), "%s##axt3", tr("action.type_mouse"));
+                snprintf(lbA4, sizeof(lbA4), "%s##axt4", tr("action.type_mousemove"));
+                typeBtn4(lbA0, ActionType::Xbox);       ImGui::SameLine();
+                typeBtn4(lbA1, ActionType::Macro);      ImGui::SameLine();
+                typeBtn4(lbA2, ActionType::Keyboard);   ImGui::SameLine();
+                typeBtn4(lbA3, ActionType::Mouse);      ImGui::SameLine();
+                typeBtn4(lbA4, ActionType::MouseMove);  ImGui::SameLine();
                 {
                     auto it4 = m_model.axisActionEdits.find(axisKey);
                     bool hasRanges4 = (it4 != m_model.axisActionEdits.end() &&
@@ -1049,7 +1059,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                                 cur.push_back(re);
                             }
                         m_trigRangeModal.open(axisKey, cur);
-                        m_sel.actionType = H5ActionType::Xbox;
+                        m_sel.actionType = ActionType::Xbox;
                         m_sel.captureKeys.clear(); m_sel.macroSel.clear();
                     }
                     if (hasRanges4) ImGui::PopStyleColor();
@@ -1057,7 +1067,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
 
                 ImGui::Spacing();
 
-                if (m_sel.actionType == H5ActionType::Macro) {
+                if (m_sel.actionType == ActionType::Macro) {
                     if (!m_macroNamesLoaded) {
                         m_macroNames.clear();
                         try {
@@ -1071,29 +1081,29 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                         ha.type = HalfAxisActionType::Macro; ha.target = m_sel.macroSel;
                         m_model.axisActionEdits[axisKey] = ha;
                         m_sel.physComp = -1; m_sel.stickDir.clear();
-                        m_sel.actionType = H5ActionType::Xbox; m_sel.macroSel.clear();
+                        m_sel.actionType = ActionType::Xbox; m_sel.macroSel.clear();
                     }
-                } else if (m_sel.actionType == H5ActionType::Keyboard) {
+                } else if (m_sel.actionType == ActionType::Keyboard) {
                     bool cancel = (physNow.btnLB && physNow.btnRB) || (physNow.btnA && physNow.btnB);
-                    if (cancel) { m_sel.actionType = H5ActionType::Xbox; m_sel.captureKeys.clear(); }
+                    if (cancel) { m_sel.actionType = ActionType::Xbox; m_sel.captureKeys.clear(); }
                     else if (ActionPanel::renderKeyboardCapture("kb_ax", m_sel.captureKeys, availW4)) {
                         HalfAxisAction ha;
                         ha.type = HalfAxisActionType::Keyboard;
                         for (const auto& p : m_sel.captureKeys) ha.keys.push_back(p.first);
                         m_model.axisActionEdits[axisKey] = ha;
                         m_sel.physComp = -1; m_sel.stickDir.clear();
-                        m_sel.actionType = H5ActionType::Xbox; m_sel.captureKeys.clear();
+                        m_sel.actionType = ActionType::Xbox; m_sel.captureKeys.clear();
                     }
-                } else if (m_sel.actionType == H5ActionType::Mouse) {
+                } else if (m_sel.actionType == ActionType::Mouse) {
                     std::string mbResult;
                     if (ActionPanel::renderMouseButtons("mb_ax", mbResult, availW4)) {
                         HalfAxisAction ha;
                         ha.type = HalfAxisActionType::MouseClick; ha.mouseButton = mbResult;
                         m_model.axisActionEdits[axisKey] = ha;
                         m_sel.physComp = -1; m_sel.stickDir.clear();
-                        m_sel.actionType = H5ActionType::Xbox;
+                        m_sel.actionType = ActionType::Xbox;
                     }
-                } else if (m_sel.actionType == H5ActionType::MouseMove) {
+                } else if (m_sel.actionType == ActionType::MouseMove) {
                     float panelW = 280.0f;
                     float offX2 = (availW4 - panelW) * 0.5f;
                     if (offX2 > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX2);
@@ -1124,7 +1134,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                         };
                         m_model.axisActionEdits[oppositeKey(axisKey)] = ha;
                         m_sel.physComp = -1; m_sel.stickDir.clear();
-                        m_sel.actionType = H5ActionType::Xbox;
+                        m_sel.actionType = ActionType::Xbox;
                     }
                 }
                 // Mando mode: user clicks virtual pad → onVirtHitAxisAction
@@ -1173,7 +1183,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
         float totalW = btnW * 5 + ImGui::GetStyle().ItemSpacing.x * 4;
         float offX   = (availW - totalW) * 0.5f;
         if (offX > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX);
-        auto typeBtn7 = [&](const char* label, H5ActionType type) {
+        auto typeBtn7 = [&](const char* label, ActionType type) {
             bool sel = (m_sel.actionType == type);
             if (sel) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
             if (ImGui::Button(label, { btnW, 0.0f })) {
@@ -1181,17 +1191,21 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
             }
             if (sel) ImGui::PopStyleColor();
         };
-        typeBtn7("Xbox/Anal.##h7t0", H5ActionType::Xbox);    ImGui::SameLine();
-        typeBtn7("Macro##h7t1",      H5ActionType::Macro);   ImGui::SameLine();
-        typeBtn7("Teclado##h7t2",    H5ActionType::Keyboard); ImGui::SameLine();
-        typeBtn7("Rat\xC3\xB3n##h7t3", H5ActionType::Mouse); ImGui::SameLine();
+        char lbH1[64], lbH2[64], lbH3[64];
+        snprintf(lbH1, sizeof(lbH1), "%s##h7t1", tr("action.type_macro"));
+        snprintf(lbH2, sizeof(lbH2), "%s##h7t2", tr("action.type_keyboard"));
+        snprintf(lbH3, sizeof(lbH3), "%s##h7t3", tr("action.type_mouse"));
+        typeBtn7("Xbox/Anal.##h7t0", ActionType::Xbox);    ImGui::SameLine();
+        typeBtn7(lbH1,               ActionType::Macro);   ImGui::SameLine();
+        typeBtn7(lbH2,               ActionType::Keyboard); ImGui::SameLine();
+        typeBtn7(lbH3,               ActionType::Mouse);   ImGui::SameLine();
         {
             const std::vector<RangeEdit>& curRanges = (m_sel.triggerSrc == "l2") ? m_model.trigLRangeEdits : m_model.trigRRangeEdits;
             bool hasRanges = !curRanges.empty();
             if (hasRanges) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
             if (ImGui::Button(trid("btn.ranges", "h7t4").c_str(), { btnW, 0.0f })) {
                 m_trigRangeModal.open(m_sel.triggerSrc, curRanges);
-                m_sel.actionType = H5ActionType::Xbox;
+                m_sel.actionType = ActionType::Xbox;
                 m_sel.captureKeys.clear(); m_sel.macroSel.clear();
             }
             if (hasRanges) ImGui::PopStyleColor();
@@ -1199,7 +1213,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
 
         ImGui::Spacing();
 
-        if (m_sel.actionType == H5ActionType::Macro) {
+        if (m_sel.actionType == ActionType::Macro) {
             if (!m_macroNamesLoaded) {
                 m_macroNames.clear();
                 try {
@@ -1212,27 +1226,27 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                 ButtonAction act;
                 act.type = ButtonActionType::Macro; act.physical = m_sel.triggerSrc; act.name = m_sel.macroSel;
                 m_model.trigActionEdits[m_sel.triggerSrc] = act;
-                m_sel.triggerSrc.clear(); m_sel.actionType = H5ActionType::Xbox; m_sel.macroSel.clear();
+                m_sel.triggerSrc.clear(); m_sel.actionType = ActionType::Xbox; m_sel.macroSel.clear();
             }
 
-        } else if (m_sel.actionType == H5ActionType::Keyboard) {
+        } else if (m_sel.actionType == ActionType::Keyboard) {
             bool cancel = (physNow.btnLB && physNow.btnRB) || (physNow.btnA && physNow.btnB);
-            if (cancel) { m_sel.actionType = H5ActionType::Xbox; m_sel.captureKeys.clear(); }
+            if (cancel) { m_sel.actionType = ActionType::Xbox; m_sel.captureKeys.clear(); }
             else if (ActionPanel::renderKeyboardCapture("kb_h7", m_sel.captureKeys, availW)) {
                 ButtonAction act;
                 act.type = ButtonActionType::Keyboard; act.physical = m_sel.triggerSrc;
                 for (const auto& p : m_sel.captureKeys) act.keys.push_back(p.first);
                 m_model.trigActionEdits[m_sel.triggerSrc] = act;
-                m_sel.triggerSrc.clear(); m_sel.actionType = H5ActionType::Xbox; m_sel.captureKeys.clear();
+                m_sel.triggerSrc.clear(); m_sel.actionType = ActionType::Xbox; m_sel.captureKeys.clear();
             }
 
-        } else if (m_sel.actionType == H5ActionType::Mouse) {
+        } else if (m_sel.actionType == ActionType::Mouse) {
             std::string mbResult;
             if (ActionPanel::renderMouseButtons("mb_h7", mbResult, availW)) {
                 ButtonAction act;
                 act.type = ButtonActionType::MouseClick; act.physical = m_sel.triggerSrc; act.mouseButton = mbResult;
                 m_model.trigActionEdits[m_sel.triggerSrc] = act;
-                m_sel.triggerSrc.clear(); m_sel.actionType = H5ActionType::Xbox;
+                m_sel.triggerSrc.clear(); m_sel.actionType = ActionType::Xbox;
             }
         }
     } // H7 block
@@ -1262,7 +1276,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
             }
             m_sel.physComp = -1; m_sel.stickDir.clear();
         }
-        m_sel.actionType = H5ActionType::Xbox;
+        m_sel.actionType = ActionType::Xbox;
         m_sel.captureKeys.clear(); m_sel.macroSel.clear();
     }
 
@@ -1285,7 +1299,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
     if (ImGui::Button(trid("btn.cancel", "mapCancel").c_str(), { 100.0f, 0.0f })) {
         m_sel.physComp = -1; m_sel.stickDir.clear(); m_sel.stickAsButton = false;
         m_sel.dpadDir.clear(); m_sel.triggerSrc.clear();
-        m_sel.actionType = H5ActionType::Xbox;
+        m_sel.actionType = ActionType::Xbox;
         m_sel.captureKeys.clear(); m_sel.macroSel.clear();
         reload();
         m_active = false;
@@ -1320,7 +1334,7 @@ void MappingEditor::handleClick(PadView& phys, PadView& virt, ImVec2 mouse) {
             bool hasSource = (m_sel.physComp >= 0 &&
                               (phys.getLayout().components[m_sel.physComp].type != "stick" ||
                                m_sel.stickAsButton)) ||
-                             (!m_sel.triggerSrc.empty() && m_sel.actionType == H5ActionType::Xbox);
+                             (!m_sel.triggerSrc.empty() && m_sel.actionType == ActionType::Xbox);
             if (hasSource) { onVirtArrowHit(phys, virt, virtArrowComp, virtArrowDir); return; }
         }
     }
@@ -1328,17 +1342,17 @@ void MappingEditor::handleClick(PadView& phys, PadView& virt, ImVec2 mouse) {
     if (m_sel.physComp >= 0) {
         const std::string& selType = phys.getLayout().components[m_sel.physComp].type;
         if (selType == "stick" && !m_sel.stickAsButton) {
-            if (!m_sel.stickDir.empty() && m_sel.actionType == H5ActionType::Xbox)
+            if (!m_sel.stickDir.empty() && m_sel.actionType == ActionType::Xbox)
                 onVirtHitAxisAction(phys, virt, mouse);
             else if (m_sel.stickDir.empty())
                 onVirtHitPhysStick(phys, virt, mouse);
-        } else if (m_sel.actionType == H5ActionType::Xbox) {
+        } else if (m_sel.actionType == ActionType::Xbox) {
             onVirtHitPhysButton(phys, virt, mouse);
         }
         return;
     }
 
-    if (!m_sel.triggerSrc.empty() && m_sel.actionType == H5ActionType::Xbox)
+    if (!m_sel.triggerSrc.empty() && m_sel.actionType == ActionType::Xbox)
         onVirtHitTriggerSrc(virt, mouse);
 }
 
@@ -1348,7 +1362,7 @@ void MappingEditor::onArrowHit(int arrowComp, const std::string& dir) {
         m_sel.physComp = -1; m_sel.stickDir.clear(); m_sel.stickAsButton = false;
     } else {
         m_sel.physComp = arrowComp; m_sel.stickDir = dir; m_sel.stickAsButton = false;
-        m_sel.actionType = H5ActionType::Xbox;
+        m_sel.actionType = ActionType::Xbox;
         m_sel.triggerSrc.clear(); m_sel.dpadDir.clear();
         m_sel.captureKeys.clear(); m_sel.macroSel.clear();
     }
@@ -1360,19 +1374,19 @@ void MappingEditor::onPhysButtonHit(PadView& phys, int physHit) {
     if (hitState == "triggerL" || hitState == "triggerR") {
         std::string trigSrc = (hitState == "triggerL") ? "l2" : "r2";
         if (m_sel.triggerSrc == trigSrc) {
-            m_sel.triggerSrc.clear(); m_sel.actionType = H5ActionType::Xbox;
+            m_sel.triggerSrc.clear(); m_sel.actionType = ActionType::Xbox;
             m_sel.captureKeys.clear(); m_sel.macroSel.clear();
         } else {
             m_sel.triggerSrc = trigSrc; m_sel.physComp = -1;
-            m_sel.actionType = H5ActionType::Xbox;
+            m_sel.actionType = ActionType::Xbox;
             m_sel.captureKeys.clear(); m_sel.macroSel.clear();
         }
     } else if (physHit == m_sel.physComp) {
-        m_sel.physComp = -1; m_sel.actionType = H5ActionType::Xbox;
+        m_sel.physComp = -1; m_sel.actionType = ActionType::Xbox;
         m_sel.captureKeys.clear(); m_sel.macroSel.clear();
     } else {
         m_sel.physComp = physHit; m_sel.triggerSrc.clear();
-        m_sel.actionType = H5ActionType::Xbox;
+        m_sel.actionType = ActionType::Xbox;
         m_sel.captureKeys.clear(); m_sel.macroSel.clear();
     }
 }
@@ -1383,7 +1397,7 @@ void MappingEditor::onPhysStickHit(int physHit) {
         m_sel.physComp = -1; m_sel.stickAsButton = false;
     } else {
         m_sel.physComp = physHit; m_sel.stickAsButton = true; m_sel.stickDir.clear();
-        m_sel.actionType = H5ActionType::Xbox;
+        m_sel.actionType = ActionType::Xbox;
         m_sel.captureKeys.clear(); m_sel.macroSel.clear();
     }
 }
@@ -1396,7 +1410,7 @@ void MappingEditor::onPhysDpadHit(PadView& phys, int physHit, ImVec2 mouse) {
         m_sel.physComp = -1; m_sel.dpadDir.clear();
     } else {
         m_sel.physComp = physHit; m_sel.triggerSrc.clear(); m_sel.dpadDir = dir;
-        m_sel.actionType = H5ActionType::Xbox;
+        m_sel.actionType = ActionType::Xbox;
         m_sel.captureKeys.clear(); m_sel.macroSel.clear();
     }
 }
@@ -1592,7 +1606,7 @@ void MappingEditor::onVirtHitTriggerSrc(PadView& virt, ImVec2 mouse) {
         }
     }
 
-    if (assigned) { m_sel.triggerSrc.clear(); m_sel.actionType = H5ActionType::Xbox; }
+    if (assigned) { m_sel.triggerSrc.clear(); m_sel.actionType = ActionType::Xbox; }
 }
 
 // ---------------------------------------------------------------------------
@@ -1660,7 +1674,7 @@ void MappingEditor::onVirtArrowHit(PadView& phys, PadView& virt, int virtComp, c
     }
 
     m_sel.physComp = -1; m_sel.stickAsButton = false; m_sel.dpadDir.clear();
-    m_sel.triggerSrc.clear(); m_sel.actionType = H5ActionType::Xbox;
+    m_sel.triggerSrc.clear(); m_sel.actionType = ActionType::Xbox;
 }
 
 // ---------------------------------------------------------------------------

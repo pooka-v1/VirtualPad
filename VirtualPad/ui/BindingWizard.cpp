@@ -154,8 +154,8 @@ void BindingWizard::renderNameController() {
     if (!c.productName.empty())
         ImGui::Text(tr("wizard.hid_name"), c.productName.c_str());
     {
-        const char* conn = c.connectionType == "bt"  ? "Bluetooth" :
-                           c.connectionType == "usb" ? "USB" : "desconocida";
+        const char* conn = c.connectionType == "bt"  ? tr("wizard.conn_bt") :
+                           c.connectionType == "usb" ? tr("wizard.conn_usb") : tr("wizard.conn_unknown");
         ImGui::Text(tr("wizard.connection"), conn);
         ImGui::Checkbox(tr("wizard.specific_mapping"), &m_saveWithConnection);
         if (m_saveWithConnection)
@@ -262,12 +262,12 @@ void BindingWizard::renderBinding() {
                 const char* id = (step.compIndex >= 0)
                     ? m_layout.components[step.compIndex].id.c_str()
                     : step.state.c_str();
-                snprintf(promptBuf, sizeof(promptBuf), "Pulsa el boton  [ %s ]", id);
+                snprintf(promptBuf, sizeof(promptBuf), tr("wizard.press_button"), id);
                 promptText = promptBuf;
             } else if (t == "axis" || t == "trigger") {
                 promptText = step.mapping.prompt.c_str();
             } else if (t == "dpad") {
-                promptText = "Pulsa cualquier direccion del D-pad";
+                promptText = tr("wizard.press_dpad");
             }
 
             ImGui::SetWindowFontScale(1.35f);
@@ -758,10 +758,21 @@ bool BindingWizard::captureAxis(std::string& outSource, bool& outInvert, bool in
         if (m_stepCooldown == 0) snapshotBaseline(); // re-snapshot once movement settles
         return false;
     }
-    // Skip axes already committed in previous steps to avoid bleed-over
-    auto alreadyBound = [&](const std::string& name) {
-        for (const auto& a : m_boundAxes)
-            if (a.source == name) return true;
+    // Skip axes already committed in previous steps to avoid bleed-over.
+    // Exception: allow reuse when the current step is the paired trigger (trigger_combined).
+    const BindStep& curStep = m_steps[m_currentStep];
+    const bool curIsTrigger = (curStep.mapping.type == "trigger");
+    const std::string& curTarget = curStep.mapping.axis_target;
+    auto alreadyBound = [&](const std::string& name) -> bool {
+        for (const auto& a : m_boundAxes) {
+            if (a.source != name) continue;
+            if (curIsTrigger &&
+                (a.target == "trigger_l" || a.target == "trigger_r") &&
+                (curTarget  == "trigger_l" || curTarget  == "trigger_r") &&
+                a.target != curTarget)
+                continue; // same axis, opposite trigger → trigger_combined, not a conflict
+            return true;
+        }
         return false;
     };
 
@@ -903,10 +914,24 @@ void BindingWizard::saveResult() {
     }
     entry["buttons"] = buttons;
 
-    // Axes
+    // Axes — detect trigger_combined: same source bound as trigger_l + trigger_r pair
     json axes = json::object();
-    for (const auto& a : m_boundAxes)
+    for (const auto& a : m_boundAxes) {
+        if (a.target == "trigger_l" || a.target == "trigger_r") {
+            auto pairedIt = std::find_if(m_boundAxes.begin(), m_boundAxes.end(),
+                [&](const AxisResult& b) {
+                    return b.source == a.source &&
+                           (b.target == "trigger_l" || b.target == "trigger_r") &&
+                           b.target != a.target;
+                });
+            if (pairedIt != m_boundAxes.end()) {
+                if (a.target == "trigger_l")  // write combined once, from the trigger_l entry
+                    axes[a.source] = { { "target", "trigger_combined" }, { "invert", false } };
+                continue; // trigger_r entry is skipped (already merged above)
+            }
+        }
         axes[a.source] = { { "target", a.target }, { "invert", a.invert } };
+    }
     entry["axes"] = axes;
 
     // Dpad

@@ -5,12 +5,12 @@
 #include "../GamepadState.h"
 
 // ---------------------------------------------------------------------------
-// H5ActionType — action panel mode selector.
-// Used both for button/axis assignments and inside the rangos modal.
-// Defined here (not inside MappingSelection) so AppWindow can use it for
-// the rangos modal state without prefixing.
+// ActionType — action panel mode selector.
+// Used both for button/axis assignments and inside the trigger range modal.
+// Defined here (not inside MappingSelection) so TriggerRangeModal can use it
+// without a circular dependency.
 // ---------------------------------------------------------------------------
-enum class H5ActionType { Xbox, Analog, Macro, Keyboard, Mouse, MouseMove };
+enum class ActionType { Xbox, Analog, Macro, Keyboard, Mouse, MouseMove };
 
 // ---------------------------------------------------------------------------
 // MappingSelection — all transient UI selection and interaction state for the
@@ -47,7 +47,7 @@ struct MappingSelection {
     std::string flashPhysArrowDir;
 
     // --- H5 action panel state ---
-    H5ActionType actionType     = H5ActionType::Xbox;
+    ActionType actionType     = ActionType::Xbox;
     std::vector<std::pair<std::string, std::string>> captureKeys; // {json_name, display}
     std::string  macroSel;
 
@@ -80,7 +80,7 @@ struct MappingSelection {
         flashSlotKey.clear();
         flashPhysArrowComp = -1;
         flashPhysArrowDir.clear();
-        actionType    = H5ActionType::Xbox;
+        actionType    = ActionType::Xbox;
         captureKeys.clear();
         macroSel.clear();
         h9HoldComp    = -1;

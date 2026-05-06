@@ -529,9 +529,30 @@ The wizard uses `state_map.json` to know which physical button name (`physical`)
 | `data/FinalFantasyX.json` | Game profile for FFX (overrides on top of base) |
 | `data/MonsterHunterStories2.json` | Game profile for MHS2 (overrides on top of base) |
 | `data/macros.json` | Reusable macro library |
-| `data/virtualpad.json` | VID/PID of the virtual controller created by ViGEm + log level |
+| `data/virtualpad.json` | VID/PID of the virtual controller, locale, log level, and stick thresholds |
+| `data/strings/strings_en.json` | UI strings — English |
+| `data/strings/strings_es.json` | UI strings — Spanish |
 
 See [MACROS.md](MACROS.md) for the complete macro syntax.
+
+---
+
+## Localization
+
+The active UI language is set via `"locale"` in `data/virtualpad.json`:
+
+```json
+{ "locale": "en" }
+```
+
+| Value | Language |
+|---|---|
+| `"en"` | English |
+| `"es"` | Spanish |
+
+Strings are loaded from `data/strings/strings_{locale}.json` at startup. If a key is missing from the file, the key name itself is shown as a fallback — nothing crashes.
+
+To add a new language: copy `strings_en.json`, rename it `strings_xx.json`, translate the values (never the keys), and set `"locale": "xx"` in `virtualpad.json`.
 
 ---
 

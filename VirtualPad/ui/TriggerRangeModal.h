@@ -3,7 +3,7 @@
 #include <vector>
 #include <utility>
 #include "MappingModel.h"      // RangeEdit, ButtonAction, ButtonActionType
-#include "MappingSelection.h"  // H5ActionType
+#include "MappingSelection.h"  // ActionType
 
 // ---------------------------------------------------------------------------
 // TriggerRangeModal — self-contained trigger-range editor modal.
@@ -31,7 +31,7 @@ private:
     std::string  m_forKey;
     std::vector<RangeEdit> m_work;
     int          m_selSect   = -1;
-    H5ActionType m_actType   = H5ActionType::Xbox;
+    ActionType m_actType   = ActionType::Xbox;
     std::vector<std::pair<std::string, std::string>> m_captureKeys;
     std::string  m_macroSel;
     int          m_xboxSel   = -1;

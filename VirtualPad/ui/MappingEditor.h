@@ -14,7 +14,7 @@
 // MappingEditor — self-contained mapping editor widget.
 //
 // Owns: MappingModel (pending edits), MappingSelection (UI state),
-//       rangos modal state, macro name cache, arrow texture.
+//       range modal state, macro name cache, arrow texture.
 //
 // AppWindow calls:
 //   init()        once after D3D11 device is ready
