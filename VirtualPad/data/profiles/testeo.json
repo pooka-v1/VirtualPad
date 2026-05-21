@@ -1,0 +1,9 @@
+{
+  "buttons": {
+    "l1": {
+      "name": "vuelta",
+      "type": "macro"
+    }
+  },
+  "profile_name": "testeo"
+}

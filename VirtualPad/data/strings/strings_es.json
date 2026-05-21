@@ -21,7 +21,8 @@
         "copy":     "Copiar",
         "new":      "Nuevo",
         "activate": "Activar",
-        "ranges":   "Rangos"
+        "ranges":   "Rangos",
+        "edit":     "Editar"
     },
     "engine": {
         "connected":      "Conectado - %s",
@@ -163,12 +164,12 @@
         "toast_err_save":       "Error al guardar: ",
         "zone_front":           "FRONTAL",
         "zone_top":             "SUPERIOR",
-        "state_group_face":     "── Cara ──",
-        "state_group_shoulder": "── Hombros ──",
-        "state_group_extras":   "── Extras ──",
-        "state_group_dpad":     "── D-pad ──",
-        "state_group_axes":     "── Ejes ──",
-        "state_group_gyro":     "── Giroscopio ──"
+        "state_group_face":     "-- Cara --",
+        "state_group_shoulder": "-- Hombros --",
+        "state_group_extras":   "-- Extras --",
+        "state_group_dpad":     "-- D-pad --",
+        "state_group_axes":     "-- Ejes --",
+        "state_group_gyro":     "-- Giroscopio --"
     },
     "action": {
         "press_keys":    "(pulsa teclas...)",
@@ -216,5 +217,30 @@
     },
     "padview": {
         "assets_not_loaded": "Assets no cargados."
+    },
+    "macros": {
+        "title":          "Macros",
+        "ref_title":      "Referencia DSL",
+        "ref_operators":  "Operadores",
+        "ref_buttons":    "Botones / Analogico",
+        "no_macros":      "No hay macros definidas.",
+        "name_label":     "Nombre:",
+        "dsl_label":      "Ejecucion:",
+        "valid":          "Valido",
+        "invalid":        "Invalido:",
+        "err_empty":      "La ejecucion no puede estar vacia.",
+        "err_name_taken": "El nombre ya existe.",
+        "hint_select":    "Selecciona una macro o pulsa Nuevo.",
+        "toast_saved":    "Guardado.",
+        "toast_deleted":  "Eliminado.",
+        "confirm_delete": "¿Eliminar esta macro? Esta accion no se puede deshacer."
+    },
+    "profiles": {
+        "title":          "Perfiles de juego",
+        "new":            "— Nuevo perfil —",
+        "name_label":     "Nombre",
+        "btn_create":     "Crear",
+        "toast_saved":    "Guardado",
+        "confirm_delete": "¿Eliminar este perfil? Esta accion no se puede deshacer."
     }
 }

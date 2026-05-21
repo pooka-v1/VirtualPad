@@ -38,7 +38,47 @@ void MappingEditor::unload() {
 }
 
 // ---------------------------------------------------------------------------
+void MappingEditor::activateProfile(const std::vector<std::string>& profilePaths,
+                                    const std::vector<std::string>& profileNames,
+                                    int preselectedIdx) {
+    m_mode         = Mode::kProfile;
+    m_active       = true;
+    m_profilePaths = profilePaths;
+    m_profileNames = profileNames;
+    m_profIdx      = preselectedIdx;
+    m_profToast    = false;
+    memset(m_profNameBuf, 0, sizeof(m_profNameBuf));
+
+    DeviceCandidate dev = m_engine->getActiveDevice();
+    m_model.vid = dev.vid;
+    m_model.pid = dev.pid;
+    m_sel.physComp = -1;
+    reload();
+}
+
 void MappingEditor::reload() {
+    if (m_mode == Mode::kProfile) {
+        if (m_profIdx >= 0 && m_profIdx < (int)m_profilePaths.size()) {
+            DeviceCandidate dev = m_engine->getActiveDevice();
+            const ControllerConfig* base = findConfig(m_configs, dev.vid, dev.pid);
+            if (base) {
+                GameProfile profile = loadGameProfile(m_profilePaths[m_profIdx]);
+                m_model.loadProfile(*base, profile);
+                strncpy_s(m_profNameBuf, profile.profile_name.c_str(), sizeof(m_profNameBuf) - 1);
+            }
+        } else {
+            // New profile: load base config as starting point
+            DeviceCandidate dev = m_engine->getActiveDevice();
+            const ControllerConfig* base = findConfig(m_configs, dev.vid, dev.pid);
+            if (base) m_model.reloadFromConfig(*base);
+            memset(m_profNameBuf, 0, sizeof(m_profNameBuf));
+        }
+        m_sel.triggerSrc.clear();
+        m_sel.h9HoldTriggerSrc.clear();
+        m_sel.h9HoldTriggerTimer = 0.0f;
+        return;
+    }
+
     m_model.reload(m_configs);
     m_sel.triggerSrc.clear();
     m_sel.h9HoldTriggerSrc.clear();
@@ -46,6 +86,23 @@ void MappingEditor::reload() {
 }
 
 void MappingEditor::save() {
+    if (m_mode == Mode::kProfile) {
+        if (m_profIdx >= 0 && m_profIdx < (int)m_profilePaths.size()) {
+            DeviceCandidate dev = m_engine->getActiveDevice();
+            const ControllerConfig* base = findConfig(m_configs, dev.vid, dev.pid);
+            if (base) {
+                try {
+                    m_model.saveProfile(m_profilePaths[m_profIdx],
+                                        m_profNameBuf[0] ? m_profNameBuf : m_profileNames[m_profIdx].c_str(),
+                                        *base);
+                    m_engine->requestProfileReload();
+                    m_profToast     = true;
+                    m_profToastTime = GetTickCount64();
+                } catch (...) {}
+            }
+        }
+        return;
+    }
     try { m_model.save("data/controllers.json"); } catch (...) {}
     m_configs = loadControllerConfigs("data/controllers.json");
     m_engine->reloadConfigs();
@@ -83,13 +140,113 @@ static std::pair<int, std::string> slotKeyToArrow(const PadLayout& vLayout, cons
 // render — full mapping editor UI (called each frame when active)
 // ---------------------------------------------------------------------------
 void MappingEditor::render(PadView& phys, PadView& virt) {
-    // ── Pre-populate edits cuando cambia el mando activo ─────────────────────
-    DeviceCandidate dev = m_engine->getActiveDevice();
-    if (dev.vid != m_model.vid || dev.pid != m_model.pid) {
-        m_model.vid   = dev.vid;
-        m_model.pid   = dev.pid;
-        m_sel.physComp = -1;
-        reload();
+    // ── Pre-populate edits cuando cambia el mando activo (normal mode only) ──
+    if (m_mode == Mode::kNormal) {
+        DeviceCandidate dev = m_engine->getActiveDevice();
+        if (dev.vid != m_model.vid || dev.pid != m_model.pid) {
+            m_model.vid    = dev.vid;
+            m_model.pid    = dev.pid;
+            m_sel.physComp = -1;
+            reload();
+        }
+    }
+
+    // ── Profile mode header ───────────────────────────────────────────────────
+    if (m_mode == Mode::kProfile) {
+        if (ImGui::Button(tr("btn.back"))) {
+            m_mode   = Mode::kNormal;
+            m_active = false;
+            return;
+        }
+        ImGui::SameLine(0.0f, 16.0f);
+        ImGui::Text("%s", tr("profiles.title"));
+
+        // Toast
+        if (m_profToast) {
+            if (GetTickCount64() - m_profToastTime < 2500) {
+                ImGui::SameLine(0.0f, 16.0f);
+                ImGui::TextColored({ 0.3f, 1.0f, 0.3f, 1.0f }, "%s", tr("profiles.toast_saved"));
+            } else {
+                m_profToast = false;
+            }
+        }
+
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Profile selector
+        std::vector<const char*> items;
+        items.push_back(tr("profiles.new"));
+        for (const auto& n : m_profileNames) items.push_back(n.c_str());
+
+        int comboIdx = m_profIdx + 1;  // 0 = new, 1+ = existing
+        ImGui::SetNextItemWidth(240.0f);
+        if (ImGui::Combo("##profsel", &comboIdx, items.data(), (int)items.size())) {
+            m_profIdx = comboIdx - 1;
+            m_sel.physComp = -1;
+            reload();
+        }
+        ImGui::SameLine(0.0f, 8.0f);
+
+        // Name field (always editable)
+        ImGui::SetNextItemWidth(200.0f);
+        ImGui::InputText(tr("profiles.name_label"), m_profNameBuf, sizeof(m_profNameBuf));
+        ImGui::SameLine(0.0f, 8.0f);
+
+        if (m_profIdx < 0) {
+            // New profile: create button (needs a name and a connected device)
+            DeviceCandidate dev = m_engine->getActiveDevice();
+            bool canCreate = m_profNameBuf[0] != '\0' && (dev.vid != 0 || dev.pid != 0);
+            ImGui::BeginDisabled(!canCreate);
+            if (ImGui::Button(tr("profiles.btn_create"))) {
+                // Build a path from the name
+                std::string safeName(m_profNameBuf);
+                for (auto& c : safeName) if (c == ' ' || c == '/' || c == '\\') c = '_';
+                std::string newPath = "data/profiles/" + safeName + ".json";
+                m_profilePaths.push_back(newPath);
+                m_profileNames.push_back(m_profNameBuf);
+                m_profIdx = (int)m_profilePaths.size() - 1;
+                m_profileListChanged = true;
+                save();
+            }
+            ImGui::EndDisabled();
+        } else {
+            // Existing profile: save + delete
+            if (ImGui::Button(tr("btn.save")))
+                save();
+            ImGui::SameLine(0.0f, 4.0f);
+            ImGui::PushStyleColor(ImGuiCol_Button,        { 0.6f, 0.15f, 0.15f, 1.0f });
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.75f, 0.2f, 0.2f, 1.0f });
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  { 0.5f, 0.1f, 0.1f, 1.0f });
+            if (ImGui::Button(tr("btn.delete")))
+                ImGui::OpenPopup("##prof_del_confirm");
+            ImGui::PopStyleColor(3);
+
+            if (ImGui::BeginPopupModal("##prof_del_confirm", nullptr,
+                                       ImGuiWindowFlags_AlwaysAutoResize)) {
+                ImGui::Text("%s", tr("profiles.confirm_delete"));
+                ImGui::Spacing();
+                if (ImGui::Button(tr("btn.delete"), { 100.0f, 0.0f })) {
+                    DeleteFileA(m_profilePaths[m_profIdx].c_str());
+                    m_profilePaths.erase(m_profilePaths.begin() + m_profIdx);
+                    m_profileNames.erase(m_profileNames.begin() + m_profIdx);
+                    m_profileListChanged = true;
+                    m_profIdx = -1;
+                    memset(m_profNameBuf, 0, sizeof(m_profNameBuf));
+                    m_sel.physComp = -1;
+                    reload();
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine(0.0f, 8.0f);
+                if (ImGui::Button(tr("btn.cancel"), { 100.0f, 0.0f }))
+                    ImGui::CloseCurrentPopup();
+                ImGui::EndPopup();
+            }
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
     }
 
     ImGui::Spacing();
@@ -1289,27 +1446,29 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
     if (mouseClicked)
         handleClick(phys, virt, mouse);
 
-    // ── Guardar / Cancelar ────────────────────────────────────────────────────
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-    if (ImGui::Button(trid("btn.save", "mapSave").c_str(), { 120.0f, 0.0f })) {
-        save();
-        m_active = false;
+    // ── Guardar / Cancelar (normal mode only — profile mode uses the header) ──
+    if (m_mode == Mode::kNormal) {
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        if (ImGui::Button(trid("btn.save", "mapSave").c_str(), { 120.0f, 0.0f })) {
+            save();
+            m_active = false;
+        }
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button,        { 0.35f, 0.35f, 0.35f, 1.0f });
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.45f, 0.45f, 0.45f, 1.0f });
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  { 0.25f, 0.25f, 0.25f, 1.0f });
+        if (ImGui::Button(trid("btn.cancel", "mapCancel").c_str(), { 100.0f, 0.0f })) {
+            m_sel.physComp = -1; m_sel.stickDir.clear(); m_sel.stickAsButton = false;
+            m_sel.dpadDir.clear(); m_sel.triggerSrc.clear();
+            m_sel.actionType = ActionType::Xbox;
+            m_sel.captureKeys.clear(); m_sel.macroSel.clear();
+            reload();
+            m_active = false;
+        }
+        ImGui::PopStyleColor(3);
     }
-    ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Button,        { 0.35f, 0.35f, 0.35f, 1.0f });
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.45f, 0.45f, 0.45f, 1.0f });
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  { 0.25f, 0.25f, 0.25f, 1.0f });
-    if (ImGui::Button(trid("btn.cancel", "mapCancel").c_str(), { 100.0f, 0.0f })) {
-        m_sel.physComp = -1; m_sel.stickDir.clear(); m_sel.stickAsButton = false;
-        m_sel.dpadDir.clear(); m_sel.triggerSrc.clear();
-        m_sel.actionType = ActionType::Xbox;
-        m_sel.captureKeys.clear(); m_sel.macroSel.clear();
-        reload();
-        m_active = false;
-    }
-    ImGui::PopStyleColor(3);
 }
 
 // ---------------------------------------------------------------------------

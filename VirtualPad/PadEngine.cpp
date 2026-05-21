@@ -498,14 +498,17 @@ void PadEngine::threadFunc() {
 
         auto input = std::make_unique<HIDInputSource>(selected.hidPath, *cfg);
 
-        // Inject PhysicalController for component-system processing (P4)
+        // Inject PhysicalController for component-system processing (P4).
+        // Rebuild button layer from effectiveCfg so profile overrides are reflected.
         {
             auto it = std::find_if(physCtrls.begin(), physCtrls.end(),
                 [&](const PhysicalController& pc) {
                     return pc.vid == selected.vid && pc.pid == selected.pid;
                 });
             if (it != physCtrls.end()) {
-                input->setPhysicalController(*it);
+                PhysicalController pc = *it;
+                rebuildPhysicalControllerButtons(pc, effectiveCfg);
+                input->setPhysicalController(pc);
                 spdlog::info("PhysicalController injected for {:04X}:{:04X}", selected.vid, selected.pid);
             }
         }
@@ -761,9 +764,9 @@ void PadEngine::threadFunc() {
     int          reconnectTries    = 0;
 
     while (m_running && !m_switchPending.load()) {
-        // Profile hot-swap: detect change and re-apply without reopening the device
+        // Profile hot-swap: detect change or explicit reload request.
         std::string newProfile = getProfilePath();
-        if (newProfile != currentProfilePath) {
+        if (newProfile != currentProfilePath || m_profileDirty.exchange(false)) {
             currentProfilePath = newProfile;
             effectiveCfg = *cfgBase;
             if (!currentProfilePath.empty()) {
@@ -780,10 +783,33 @@ void PadEngine::threadFunc() {
                 m_activeProfileName.clear();
             }
             input->setConfig(*cfg);   // cfg == &effectiveCfg, now updated
+            // Rebuild PhysicalController button layer to reflect profile's type overrides.
+            {
+                auto it = std::find_if(physCtrls.begin(), physCtrls.end(),
+                    [&](const PhysicalController& pc) {
+                        return pc.vid == selected.vid && pc.pid == selected.pid;
+                    });
+                if (it != physCtrls.end()) {
+                    PhysicalController pc = *it;
+                    rebuildPhysicalControllerButtons(pc, effectiveCfg);
+                    input->setPhysicalController(pc);
+                }
+            }
             if (bot.isActive()) bot.toggle();
             botBtnPrev  = false;
             mouseAccumX = 0.0f;
             mouseAccumY = 0.0f;
+            initMacros();
+        }
+
+        // Macro library hot-reload: pick up macros.json changes saved by the macro manager.
+        if (m_macroLibDirty.exchange(false)) {
+            try {
+                macroLibrary = loadMacroLibrary("data/macros.json");
+                spdlog::info("Macro library reloaded: {} macros.", macroLibrary.size());
+            } catch (const std::exception& ex) {
+                spdlog::warn("Macro library reload failed: {}", ex.what());
+            }
             initMacros();
         }
 

@@ -21,7 +21,8 @@
         "copy":     "Copy",
         "new":      "New",
         "activate": "Activate",
-        "ranges":   "Ranges"
+        "ranges":   "Ranges",
+        "edit":     "Edit"
     },
     "engine": {
         "connected":      "Connected - %s",
@@ -163,12 +164,12 @@
         "toast_err_save":       "Error saving: ",
         "zone_front":           "FRONT",
         "zone_top":             "TOP",
-        "state_group_face":     "── Face ──",
-        "state_group_shoulder": "── Shoulders ──",
-        "state_group_extras":   "── Extras ──",
-        "state_group_dpad":     "── D-pad ──",
-        "state_group_axes":     "── Axes ──",
-        "state_group_gyro":     "── Gyro ──"
+        "state_group_face":     "-- Face --",
+        "state_group_shoulder": "-- Shoulders --",
+        "state_group_extras":   "-- Extras --",
+        "state_group_dpad":     "-- D-pad --",
+        "state_group_axes":     "-- Axes --",
+        "state_group_gyro":     "-- Gyro --"
     },
     "action": {
         "press_keys":    "(press keys...)",
@@ -216,5 +217,30 @@
     },
     "padview": {
         "assets_not_loaded": "Assets not loaded."
+    },
+    "macros": {
+        "title":          "Macros",
+        "ref_title":      "DSL Reference",
+        "ref_operators":  "Operators",
+        "ref_buttons":    "Buttons / Analog",
+        "no_macros":      "No macros defined.",
+        "name_label":     "Name:",
+        "dsl_label":      "Execution:",
+        "valid":          "Valid",
+        "invalid":        "Invalid:",
+        "err_empty":      "Execution string cannot be empty.",
+        "err_name_taken": "Name already exists.",
+        "hint_select":    "Select a macro or press New.",
+        "toast_saved":    "Saved.",
+        "toast_deleted":  "Deleted.",
+        "confirm_delete": "Delete this macro? This cannot be undone."
+    },
+    "profiles": {
+        "title":          "Game Profiles",
+        "new":            "— New profile —",
+        "name_label":     "Name",
+        "btn_create":     "Create",
+        "toast_saved":    "Saved",
+        "confirm_delete": "Delete this profile? This cannot be undone."
     }
 }

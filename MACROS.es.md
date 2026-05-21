@@ -102,6 +102,31 @@ Formato: `LAX`, `LAY`, `RAX`, `RAY` seguido de un valor float entre `-1.0` y `1.
 
 Para usar una duración diferente a la por defecto: `A=150` (hold+slot = 150ms).
 
+### Los steps de cruceta suprimen el input físico
+
+Cuando un step de macro incluye cualquier token de cruceta (`CU`, `CD`, `CL`, `CR`, `CDR`, …), el macro **toma el control total de la cruceta** durante ese step. El input físico del jugador en la cruceta queda suprimido.
+
+Es intencional: un macro de movimiento necesita controlar la dirección con precisión. Si el jugador va hacia la derecha y el macro manda abajo, el juego debe recibir abajo puro — no la diagonal que produciría un simple OR.
+
+Los macros **sin tokens de cruceta** no se ven afectados — el dpad físico pasa libre.
+
+### Duración mínima por paso en juegos
+
+La mayoría de juegos corren a 60 fps y leen el input una vez por frame (~16ms). **Si un paso dura menos de ~16ms, el juego puede no registrarlo.**
+
+- Mínimo seguro por dirección: **~40ms** (≈ 2–3 frames; margen para jitter del polling)
+- Mínimo seguro para la pulsación del botón: **~80ms** (≥ 5 frames)
+
+Para movimientos de juegos de lucha, usar `=` para reducir hold y slot a la vez:
+
+```
+CD=80, CDL=50, CL + Y=100
+```
+
+> Sin `=`, cada paso dura 200ms por defecto — correcto para menús y cutscenes,
+> pero demasiado lento para movimientos especiales. `A=80` fija tanto la duración
+> de pulsación como el slot (tiempo antes del siguiente paso) a 80ms.
+
 ---
 
 ## Ejemplos probados
@@ -130,11 +155,23 @@ Dos botones simultáneos difíciles de pulsar a la vez en mando de PlayStation.
 ```
 
 ### Hadouken (Street Fighter / juegos de lucha)
-Mirando a la derecha.
-Quarter circle forward + puñetazo. Cruceta: abajo → abajo-derecha → derecha + botón.
-```json
-"execution": "CU, CDR, CR + X"
+Mirando a la derecha. Quarter circle forward + puñetazo/patada.
+Movimiento de cruceta: abajo → abajo-derecha → derecha + botón.
+
+Cada dirección debe mantenerse el tiempo suficiente para que el juego la registre (≥ 2 frames a 60 fps ≈ 30ms). Usar `=` para reducir el hold y el slot de cada paso.
+
 ```
+CD=80, CDR=50, CR + X=100
+```
+
+Mirando a la izquierda (espejo):
+```
+CD=80, CDL=50, CL + X=100
+```
+
+`CDR` / `CDL` son tokens de diagonal únicos (abajo-derecha / abajo-izquierda) — pulsan ambas direcciones a la vez y **no son lo mismo que `CD + CR`** (que sería un combo simultáneo, no una secuencia).
+
+El valor por defecto de 200ms por paso va bien para el código Konami y menús, pero es demasiado lento para los movimientos especiales de juegos de lucha.
 
 ### Código Konami
 ```json

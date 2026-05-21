@@ -104,6 +104,31 @@ Format: `LAX`, `LAY`, `RAX`, `RAY` followed by a float value between `-1.0` and 
 
 To use a duration other than the default: `A=150` (hold+slot = 150ms).
 
+### D-pad steps suppress physical input
+
+When a macro step includes any d-pad token (`CU`, `CD`, `CL`, `CR`, `CDR`, …), the macro **takes full ownership of the d-pad** for that step. Physical d-pad input from the player is suppressed.
+
+This is intentional: a directional macro needs to control movement precisely. If the player is pressing right and the macro sends down, the game must receive pure down — not the diagonal that a simple OR would produce.
+
+Macros with **no d-pad tokens** are unaffected — physical d-pad passes through normally.
+
+### Minimum step duration for games
+
+Most games run at 60 fps and read input once per frame (~16ms). **If a step is shorter than ~16ms, the game may not register it.**
+
+- Safe minimum per direction step: **~40ms** (≈ 2–3 frames; accounts for polling jitter)
+- Safe minimum for the button press: **~80ms** (≥ 5 frames)
+
+For fighting game motions, use `=` to reduce both hold and slot:
+
+```
+CD=80, CDL=50, CL + Y=100
+```
+
+> Without `=`, each step defaults to 200ms — correct for menus and cutscenes,
+> but too slow for special moves. `A=80` sets both the hold duration and the
+> slot (time before the next step starts) to 80ms.
+
 ---
 
 ## Tested examples
@@ -132,11 +157,23 @@ Two buttons that are difficult to press simultaneously on a PlayStation controll
 ```
 
 ### Hadouken (Street Fighter / fighting games)
-Facing right.
-Quarter circle forward + punch. D-pad: down → down-right → right + button.
-```json
-"execution": "CU, CDR, CR + X"
+Facing right. Quarter circle forward + punch/kick.
+D-pad motion: down → down-right → right + button.
+
+Each direction must be held long enough for the game to register it (≥ 2 frames at 60 fps ≈ 30ms). Use `=` to reduce both hold and slot per step.
+
 ```
+CD=80, CDR=50, CR + X=100
+```
+
+Facing left (mirror):
+```
+CD=80, CDL=50, CL + X=100
+```
+
+`CDR` / `CDL` are single diagonal tokens (down-right / down-left) — they press both directions simultaneously and are not the same as `CD + CR` (which would be a combo, not a sequence).
+
+The default 200ms per step works for Konami codes and menus but is too slow for fighting game specials.
 
 ### Konami Code
 ```json
