@@ -652,13 +652,15 @@ void PadEngine::threadFunc() {
             // Dpad H5 macros
             for (const auto& [dir, action] : cfg->dpadActions) {
                 if (action.type != ButtonActionType::Macro) continue;
-                std::string execution;
-                auto it = macroLibrary.find(action.name);
-                if (it == macroLibrary.end()) {
-                    spdlog::warn("Macro '{}' (dpad {}) not found in library.", action.name, dir);
-                    continue;
+                std::string execution = action.execution;
+                if (execution.empty()) {
+                    auto it = macroLibrary.find(action.name);
+                    if (it == macroLibrary.end()) {
+                        spdlog::warn("Macro '{}' (dpad {}) not found in library.", action.name, dir);
+                        continue;
+                    }
+                    execution = it->second;
                 }
-                execution = it->second;
                 try {
                     Macro m;
                     MacroParser::parse(execution, m);
@@ -703,13 +705,17 @@ void PadEngine::threadFunc() {
             auto initTrigMacro = [&](const ButtonAction& act, Macro& mac, bool& ok) {
                 ok = false;
                 if (act.type != ButtonActionType::Macro) return;
-                auto it = macroLibrary.find(act.name);
-                if (it == macroLibrary.end()) {
-                    spdlog::warn("Macro '{}' (trigger) not found in library.", act.name);
-                    return;
+                std::string execution = act.execution;
+                if (execution.empty()) {
+                    auto it = macroLibrary.find(act.name);
+                    if (it == macroLibrary.end()) {
+                        spdlog::warn("Macro '{}' (trigger) not found in library.", act.name);
+                        return;
+                    }
+                    execution = it->second;
                 }
                 try {
-                    MacroParser::parse(it->second, mac);
+                    MacroParser::parse(execution, mac);
                     ok = true;
                     spdlog::info("Macro '{}' assigned to trigger.", act.name);
                 } catch (const std::exception& ex) {

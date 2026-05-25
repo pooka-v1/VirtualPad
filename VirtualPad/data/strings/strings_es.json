@@ -22,7 +22,8 @@
         "new":      "Nuevo",
         "activate": "Activar",
         "ranges":   "Rangos",
-        "edit":     "Editar"
+        "edit":       "Editar",
+        "edit_macro": "Editar inline..."
     },
     "engine": {
         "connected":      "Conectado - %s",

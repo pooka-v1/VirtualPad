@@ -10,6 +10,7 @@
 #include "MappingModel.h"
 #include "MappingSelection.h"
 #include "TriggerRangeModal.h"
+#include "MacroCreatorModal.h"
 
 // ---------------------------------------------------------------------------
 // MappingEditor — self-contained mapping editor widget.
@@ -95,8 +96,16 @@ private:
     MappingSelection m_sel;
 
     // Macro name cache (loaded lazily from data/macros.json)
-    std::vector<std::string> m_macroNames;
-    bool                     m_macroNamesLoaded = false;
+    std::vector<std::string>                           m_macroNames;
+    std::vector<std::pair<std::string,std::string>>    m_macroLibrary;
+    bool                                               m_macroNamesLoaded = false;
+
+    // Inline macro modal
+    MacroCreatorModal m_macroModal;
+    struct MacroModalPending {
+        enum class Ctx { None, Button, Axis, Trigger } ctx = Ctx::None;
+        std::string key;
+    } m_macroModalPending;
 
     // Arrow texture (lazy-loaded on first render)
     PadTexture m_arrowTex;

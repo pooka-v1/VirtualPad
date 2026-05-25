@@ -124,6 +124,7 @@ void MappingModel::saveProfile(const std::string& path, const std::string& profi
         json j = json::object();
         if (act.type == ButtonActionType::Macro) {
             j["type"] = "macro"; j["name"] = act.name;
+            if (!act.execution.empty()) j["execution"] = act.execution;
         } else if (act.type == ButtonActionType::Keyboard) {
             j["type"] = "keyboard";
             json arr = json::array();
@@ -224,6 +225,8 @@ void MappingModel::save(const std::string& path) {
                 } else if (act.type == ButtonActionType::Macro) {
                     newBtn["type"] = "macro";
                     newBtn["name"] = act.name;
+                    if (!act.execution.empty()) newBtn["execution"] = act.execution;
+                    else newBtn.erase("execution");
                     newBtn.erase("keys"); newBtn.erase("button");
                 } else if (act.type == ButtonActionType::Trigger) {
                     newBtn["type"]   = "trigger";
@@ -270,6 +273,7 @@ void MappingModel::save(const std::string& path) {
                     } else if (act.type == ButtonActionType::Macro) {
                         actJson["type"] = "macro";
                         actJson["name"] = act.name;
+                        if (!act.execution.empty()) actJson["execution"] = act.execution;
                     } else if (act.type == ButtonActionType::Trigger) {
                         actJson["type"]   = "trigger";
                         actJson["target"] = act.target;
@@ -307,6 +311,7 @@ void MappingModel::save(const std::string& path) {
                 } else if (act.type == ButtonActionType::Macro) {
                     j["type"] = "macro";
                     j["name"] = act.name;
+                    if (!act.execution.empty()) j["execution"] = act.execution;
                 } else if (act.type == ButtonActionType::Trigger) {
                     j["type"]   = "trigger";
                     j["target"] = act.target;
