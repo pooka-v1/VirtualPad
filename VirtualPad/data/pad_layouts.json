@@ -3578,6 +3578,364 @@
                 }
             ],
             "id": "Logitech-F310-Dmode"
+        },
+        {
+            "canvas": {
+                "FrontH": 200.0,
+                "TopH": 320.0,
+                "W": 480.0
+            },
+            "components": [
+                {
+                    "color": [
+                        0.8901960849761963,
+                        0.48235294222831726,
+                        0.8156862854957581,
+                        1.0
+                    ],
+                    "cx": 240.0,
+                    "cy": 100.0,
+                    "h": 200.0,
+                    "id": "body_front",
+                    "image": "templates/TempalteFront8BitsDoZero2.png",
+                    "type": "template",
+                    "view": "front",
+                    "w": 480.0
+                },
+                {
+                    "color": [
+                        0.8901960849761963,
+                        0.48235294222831726,
+                        0.8156862854957581,
+                        1.0
+                    ],
+                    "cx": 240.0,
+                    "cy": 360.0,
+                    "h": 320.0,
+                    "id": "body_top",
+                    "image": "templates/TempalteTop8BitsDoZero2.png",
+                    "type": "template",
+                    "view": "top",
+                    "w": 480.0
+                },
+                {
+                    "active_color": [
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        1.0
+                    ],
+                    "color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "cx": 125.5,
+                    "cy": 318.0,
+                    "h": 50.0,
+                    "id": "dpad",
+                    "image_down": "cross/CrossDown.png",
+                    "image_left": "cross/CrossLeft.png",
+                    "image_right": "cross/CrossRight.png",
+                    "image_up": "cross/CrossUp.png",
+                    "state_down": "dpadDown",
+                    "state_left": "dpadLeft",
+                    "state_right": "dpadRight",
+                    "state_up": "dpadUp",
+                    "type": "dpad",
+                    "view": "top",
+                    "w": 50.0
+                },
+                {
+                    "active_color": [
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        1.0
+                    ],
+                    "active_overlay_color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "cx": 350.0,
+                    "cy": 275.0,
+                    "h": 50.0,
+                    "id": "btnX",
+                    "image": "buttons/CircularButton.png",
+                    "overlay": "decorations/CharacterX.png",
+                    "overlay_color": [
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        1.0
+                    ],
+                    "state": "btnX",
+                    "type": "button",
+                    "view": "top",
+                    "w": 50.0
+                },
+                {
+                    "active_color": [
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        1.0
+                    ],
+                    "active_overlay_color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "cx": 303.0,
+                    "cy": 316.0,
+                    "h": 50.0,
+                    "id": "btnY",
+                    "image": "buttons/CircularButton.png",
+                    "overlay": "decorations/CharacterY.png",
+                    "overlay_color": [
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        1.0
+                    ],
+                    "state": "btnY",
+                    "type": "button",
+                    "view": "top",
+                    "w": 50.0
+                },
+                {
+                    "active_color": [
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        1.0
+                    ],
+                    "active_overlay_color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "cx": 393.0,
+                    "cy": 318.0,
+                    "h": 50.0,
+                    "id": "btnA",
+                    "image": "buttons/CircularButton.png",
+                    "overlay": "decorations/CharacterA.png",
+                    "overlay_color": [
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        1.0
+                    ],
+                    "state": "btnA",
+                    "type": "button",
+                    "view": "top",
+                    "w": 50.0
+                },
+                {
+                    "active_color": [
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        1.0
+                    ],
+                    "active_overlay_color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "cx": 350.0,
+                    "cy": 358.0,
+                    "h": 50.0,
+                    "id": "btnB",
+                    "image": "buttons/CircularButton.png",
+                    "overlay": "decorations/CharacterB.png",
+                    "overlay_color": [
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        1.0
+                    ],
+                    "state": "btnB",
+                    "type": "button",
+                    "view": "top",
+                    "w": 50.0
+                },
+                {
+                    "active_color": [
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        1.0
+                    ],
+                    "active_overlay_color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "cx": 200.0,
+                    "cy": 360.0,
+                    "h": 40.0,
+                    "id": "btnBack",
+                    "image": "buttons/CircularButton.png",
+                    "overlay_color": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.8999999761581421
+                    ],
+                    "state": "btnBack",
+                    "type": "button",
+                    "view": "top",
+                    "w": 40.0
+                },
+                {
+                    "active_color": [
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        1.0
+                    ],
+                    "active_overlay_color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "cx": 247.0,
+                    "cy": 360.0,
+                    "h": 40.0,
+                    "id": "btnStart",
+                    "image": "buttons/CircularButton.png",
+                    "overlay_color": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.8999999761581421
+                    ],
+                    "state": "btnStart",
+                    "type": "button",
+                    "view": "top",
+                    "w": 40.0
+                },
+                {
+                    "active_color": [
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        1.0
+                    ],
+                    "active_overlay_color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "cx": 118.0,
+                    "cy": 135.0,
+                    "h": 30.0,
+                    "id": "btnLB",
+                    "image": "buttons/L1Button8BitsDoZero2.png",
+                    "overlay": "decorations/CharactersL1.png",
+                    "overlay_color": [
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        1.0
+                    ],
+                    "overlay_scale": 0.6299999952316284,
+                    "type": "button",
+                    "view": "front",
+                    "w": 160.0
+                },
+                {
+                    "active_color": [
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        1.0
+                    ],
+                    "active_overlay_color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "cx": 355.0,
+                    "cy": 135.0,
+                    "h": 30.0,
+                    "id": "btnRB",
+                    "image": "buttons/R1Button8BitsDoZero2.png",
+                    "overlay": "decorations/CharactersR1.png",
+                    "overlay_color": [
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        0.3803921639919281,
+                        1.0
+                    ],
+                    "overlay_scale": 0.6499999761581421,
+                    "state": "btnRB",
+                    "type": "button",
+                    "view": "front",
+                    "w": 160.0
+                }
+            ],
+            "id": "8BitDo-Zero2"
         }
     ]
 }

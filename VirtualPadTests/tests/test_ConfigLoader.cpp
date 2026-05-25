@@ -6,7 +6,9 @@
 #include <catch2/catch_amalgamated.hpp>
 
 TEST_CASE("loadControllerConfigs throws for nonexistent file", "[ConfigLoader]") {
-    REQUIRE_THROWS_AS(loadControllerConfigs("__nonexistent_abc__.json"), std::runtime_error);
+    bool threw = false;
+    try { loadControllerConfigs("__nonexistent_abc__.json"); } catch (const std::runtime_error&) { threw = true; } catch (...) {}
+    CHECK(threw);
 }
 
 TEST_CASE("loadControllerConfigs parses empty controllers array", "[ConfigLoader]") {
@@ -168,7 +170,9 @@ TEST_CASE("applyProfile applies override via physShort fallback (extra buttons)"
 }
 
 TEST_CASE("loadPhysicalControllers throws for nonexistent file", "[ConfigLoader]") {
-    REQUIRE_THROWS_AS(loadPhysicalControllers("__nonexistent_abc__.json"), std::runtime_error);
+    bool threw = false;
+    try { loadPhysicalControllers("__nonexistent_abc__.json"); } catch (const std::runtime_error&) { threw = true; } catch (...) {}
+    CHECK(threw);
 }
 
 TEST_CASE("loadPhysicalControllers parses empty controllers array", "[ConfigLoader]") {

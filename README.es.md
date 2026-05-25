@@ -314,6 +314,37 @@ Los perfiles son **independientes del mando** — las claves usan el nombre virt
 
 ---
 
+## Biblioteca de macros
+
+Accesible desde la **pestaña Pads → botón Macros**. Las macros se almacenan en `data/macros.json` y son reutilizables desde cualquier mando o perfil de juego.
+
+### Panel izquierdo
+
+Lista todas las macros de la biblioteca. Al seleccionar una se muestra una vista previa visual de los steps (chips con iconos de botón) directamente en el panel.
+
+| Botón | Acción |
+|---|---|
+| **Nuevo** | Abre el editor con una macro en blanco |
+| **Editar** | Abre la macro seleccionada en el editor |
+| **Copiar** | Duplica la macro seleccionada como punto de partida |
+| **Eliminar** | Borra la macro seleccionada de la biblioteca |
+
+### Editor visual
+
+El modal de edición permite construir macros sin escribir DSL a mano:
+
+- **Selector de tokens** — botones de cara, direcciones de cruceta, posiciones de analógico y presets de movimiento (QCF/HCF para cruceta y ambos sticks analógicos). Click en un icono para crear un nuevo step Press; click en el mismo icono con el step seleccionado para añadirlo como combo simultáneo.
+- **Secuencia de steps** — cada step se muestra como un chip. Click en un chip para seleccionarlo; click en otro para extender el rango de selección.
+- **Controles de repetición** — con uno o más steps seleccionados, aplica un bucle (ms), repetición por conteo (`N veces en ms`), mientras pulsado o toggle.
+- **Hold ms** — con un step Press seleccionado, fija cuánto tiempo se mantiene el botón pulsado (por defecto 80ms).
+- **Campo DSL** — el string de macro en bruto siempre es visible y editable. Editarlo manualmente activa el modo complejo para macros arbitrariamente avanzadas.
+
+Los cambios se escriben en `data/macros.json` y se recargan en caliente de inmediato — sin reiniciar.
+
+Ver [MACROS.md](MACROS.md) para la sintaxis DSL completa y la referencia del editor.
+
+---
+
 ## Editor de layouts
 
 La pestaña **Layout** proporciona un editor visual para `data/pad_layouts.json`.

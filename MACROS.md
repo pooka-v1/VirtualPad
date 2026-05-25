@@ -23,6 +23,89 @@ If the button has an inline `"execution"`, it is used directly. Otherwise, the e
 
 ---
 
+## Visual Macro Editor
+
+Open from the **Pads tab → Macros button**. The left panel lists all macros in `data/macros.json` with a visual preview of the selected macro's steps. Use **New**, **Edit**, or **Copy** to open the editor modal.
+
+### Building steps with the token picker
+
+- **Click an icon** → creates a new Press step at the end of the sequence (no selection)
+- **Click a step** in the sequence → selects it (blue highlight)
+- **Click an icon while a Press step is selected** → adds that token to the step (simultaneous combo)
+- **Click the same icon again on a selected step** → removes that token
+- **Removing the last token** from a step → deletes the step
+
+The sequence renders combos as `[→]+[A]`, matching the DSL `CR + A`.
+
+### Token picker sections
+
+| Section | Contents |
+|---|---|
+| **Buttons** | Face buttons, bumpers, triggers, stick clicks, Start / Select |
+| **D-pad** | 8 directions · Spin CCW/CW · HCF ← · HCF → · QCF ← · QCF → |
+| **Analog L / R** | 8 directions per stick · Spin CCW/CW · HCF ← · HCF → · QCF ← · QCF → |
+| **Macros** | Insert macro from library (MacroRef) |
+
+### Step types
+
+| Type | How to create |
+|---|---|
+| **Press** | Click any button/direction icon |
+| **Wait** | Set ms value → "Add Wait" |
+| **Group** | Select a range of steps → set repeat mode → "Create repeat" |
+| **MacroRef** | "Insert macro..." → pick from library |
+
+**Hold ms** — with a Press step selected, sets how long the button is held. Default 0 uses `DEFAULT_PRESS_MS` (80ms).
+
+### Repeat controls
+
+With one or more steps selected, choose a mode and click **Create repeat**:
+
+| Mode | DSL | Description |
+|---|---|---|
+| Loop (ms) | `*5000` | Repeat for N milliseconds |
+| N times in (ms) | `*1000/10` | Exactly N repetitions in N ms |
+| While held | `*UP` | Repeat while the physical button is held |
+| Toggle | `*DO` | First press starts, second press stops |
+
+Selecting a **single step** applies the repeat spec directly: `A*UP`.
+Selecting a **range** wraps the steps in a Group: `(A, B, C)*5000`.
+
+### Spin presets
+
+The spin buttons (CCW / CW) insert 8 directional Press steps in circular order at **30ms each**. The d-pad spin starts at Right (CW) or Left (CCW); the analog spins do the same for L and R stick independently. Useful for rotation macros (see Lulu Overdrive example).
+
+### Motion presets
+
+Predefined directional sequences for fighting game inputs (**40ms per step**):
+
+| Button | Sequence | Tokens | Use |
+|---|---|---|---|
+| HCF ← | Half circle left | CR → CDR → CD → CDL → CL | Half-circle back |
+| HCF → | Half circle right | CL → CDL → CD → CDR → CR | Half-circle forward |
+| QCF ← | Quarter circle left | CD → CDL → CL | Quarter-circle back |
+| QCF → | Quarter circle right | CD → CDR → CR | Quarter-circle forward |
+
+Available for d-pad and analog (L and R stick). To build a complete special move: insert the motion preset, then click the attack button to add it as a separate Press step. Adjust hold times as needed.
+
+### Insert macro (MacroRef)
+
+**Insert macro...** opens a dropdown of all library macros. Selecting one inserts its full DSL **inline** at the end of the sequence (expanded at insert time — later edits to the source macro do not affect the referencing one).
+
+### DSL field
+
+The raw DSL string is always visible and editable below the steps. Editing it manually switches to **complex mode**: the visual step list is hidden and icon clicks append tokens to the DSL string directly. Complex mode allows arbitrarily advanced macros while still using the picker for quick insertion.
+
+### Saving
+
+Give the macro a name and click **Save**. The macro is written to `data/macros.json` and immediately hot-reloaded by the engine — no restart required.
+
+---
+
+## DSL Reference
+
+---
+
 ## Tokens — Buttons
 
 | Token | Button                    |
@@ -174,6 +257,8 @@ CD=80, CDL=50, CL + X=100
 `CDR` / `CDL` are single diagonal tokens (down-right / down-left) — they press both directions simultaneously and are not the same as `CD + CR` (which would be a combo, not a sequence).
 
 The default 200ms per step works for Konami codes and menus but is too slow for fighting game specials.
+
+> **Visual editor shortcut:** use the **QCF →** motion preset button in the d-pad section (inserts CD=40, CDR=40, CR=40 automatically), then click the attack button icon to add it as a separate step. Adjust hold times with the Hold ms field.
 
 ### Konami Code
 ```json

@@ -153,23 +153,29 @@ void MacroManagerPanel::renderActions() {
     bool hasSel = (m_selectedIdx >= 0);
 
     // ── Action buttons ────────────────────────────────────────
-    if (ImGui::Button(tr("btn.new")))
+    if (ImGui::Button(tr("btn.new"))) {
+        m_creator.setMacroLibrary(m_macros);
         m_creator.open(MacroCreatorModal::Mode::kLibrary, "", "");
+    }
 
     ImGui::SameLine();
     ImGui::BeginDisabled(!hasSel);
-    if (ImGui::Button(tr("btn.edit")))
+    if (ImGui::Button(tr("btn.edit"))) {
+        m_creator.setMacroLibrary(m_macros);
         m_creator.open(MacroCreatorModal::Mode::kLibrary,
                        m_macros[m_selectedIdx].first,
                        m_macros[m_selectedIdx].second);
+    }
     ImGui::EndDisabled();
 
     ImGui::SameLine();
     ImGui::BeginDisabled(!hasSel);
-    if (ImGui::Button(tr("btn.copy")))
+    if (ImGui::Button(tr("btn.copy"))) {
+        m_creator.setMacroLibrary(m_macros);
         m_creator.open(MacroCreatorModal::Mode::kLibrary,
                        m_macros[m_selectedIdx].first + " Copy",
                        m_macros[m_selectedIdx].second);
+    }
     ImGui::EndDisabled();
 
     ImGui::SameLine();
@@ -203,100 +209,14 @@ void MacroManagerPanel::renderActions() {
         ImGui::EndPopup();
     }
 
-    if (!hasSel) {
+    if (hasSel) {
+        ImGui::Spacing();
+        ImGui::SeparatorText(tr("macros.section_preview"));
+        m_creator.renderPreview(m_macros[m_selectedIdx].second);
+    } else {
         ImGui::Spacing();
         ImGui::TextDisabled("%s", tr("macros.hint_select"));
     }
 
-    // ── DSL reference (always visible) ───────────────────────
-    ImGui::Spacing();
-    renderReference();
-
     ImGui::EndChild();
-}
-
-void MacroManagerPanel::renderReference() {
-    if (!ImGui::CollapsingHeader(tr("macros.ref_title")))
-        return;
-
-    ImGui::Spacing();
-
-    if (ImGui::BeginTabBar("##ref_tabs")) {
-
-        // ── Operators tab ─────────────────────────────────────
-        if (ImGui::BeginTabItem(tr("macros.ref_operators"))) {
-            ImGui::Spacing();
-            static const struct { const char* syntax; const char* effect; } kOps[] = {
-                { "A, B, C",        "Sequence: A then B then C (200 ms each)" },
-                { "A + Y",          "Combo: A and Y at the same time" },
-                { "B=1000",         "Hold B for 1000 ms" },
-                { "500",            "Wait (pause) of 500 ms" },
-                { "A*5000",         "Repeat A for 5000 ms (200 ms interval)" },
-                { "A*1000/10",      "Repeat A 10 times in 1000 ms" },
-                { "A*UP",           "Repeat while physical button held" },
-                { "A*DO",           "Toggle: start on press, stop on next press" },
-                { "(A,B)*5000",     "Loop sequence A,B for 5000 ms" },
-                { "(A,B)*1000/5",   "Loop sequence 5 times in 1000 ms" },
-                { "(A,B)*UP",       "Loop sequence while button held" },
-                { "(A,B)*DO",       "Toggle sequence on/off" },
-            };
-            constexpr int kOpsRows = (int)(sizeof(kOps) / sizeof(kOps[0]));
-
-            if (ImGui::BeginTable("##ref_ops", 2,
-                    ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersInnerH |
-                    ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit)) {
-                ImGui::TableSetupColumn("Syntax",  ImGuiTableColumnFlags_WidthFixed, 140.0f);
-                ImGui::TableSetupColumn("Effect",  ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableHeadersRow();
-                for (int i = 0; i < kOpsRows; i++) {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::TextUnformatted(kOps[i].syntax);
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::TextDisabled("%s", kOps[i].effect);
-                }
-                ImGui::EndTable();
-            }
-            ImGui::EndTabItem();
-        }
-
-        // ── Buttons / Analog tab ──────────────────────────────
-        if (ImGui::BeginTabItem(tr("macros.ref_buttons"))) {
-            ImGui::Spacing();
-            static const struct { const char* token; const char* desc; } kBtns[] = {
-                { "A  B  X  Y",         "Face buttons" },
-                { "L1  R1",             "LB / RB  (bumpers)" },
-                { "L2  R2",             "LT / RT  (triggers)" },
-                { "L3  R3",             "LS / RS  (stick clicks)" },
-                { "CU  CD  CL  CR",     "D-pad  Up / Down / Left / Right" },
-                { "CUR  CUL  CDR  CDL", "D-pad diagonals" },
-                { "ST  SE",             "Start / Select (Back)" },
-                { "LAX  LAY",           "Left stick  X / Y  [-1.0 .. 1.0]" },
-                { "RAX  RAY",           "Right stick X / Y  [-1.0 .. 1.0]" },
-            };
-            constexpr int kBtnsRows = (int)(sizeof(kBtns) / sizeof(kBtns[0]));
-
-            if (ImGui::BeginTable("##ref_btns", 2,
-                    ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersInnerH |
-                    ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit)) {
-                ImGui::TableSetupColumn("Token", ImGuiTableColumnFlags_WidthFixed, 180.0f);
-                ImGui::TableSetupColumn("",      ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableHeadersRow();
-                for (int i = 0; i < kBtnsRows; i++) {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::TextUnformatted(kBtns[i].token);
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::TextDisabled("%s", kBtns[i].desc);
-                }
-                ImGui::EndTable();
-            }
-
-            ImGui::Spacing();
-            ImGui::TextDisabled("Analog tip: diagonals use +/-0.71 (cos/sin 45deg), not +/-0.5");
-            ImGui::EndTabItem();
-        }
-
-        ImGui::EndTabBar();
-    }
 }

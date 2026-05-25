@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <utility>
 #include <unordered_map>
 #include <d3d11.h>
 #include "../imgui/imgui.h"
@@ -33,6 +34,7 @@ public:
 
     void init(ID3D11Device* device);
     void open(Mode mode, const std::string& name, const std::string& execution);
+    void setMacroLibrary(const std::vector<std::pair<std::string,std::string>>& lib) { m_macroLibrary = lib; }
 
     // Call every frame. Returns true once when user confirms.
     bool render();
@@ -40,6 +42,9 @@ public:
     bool        isOpen()       const { return m_open; }
     std::string getExecution() const { return std::string(m_dslBuffer); }
     std::string getName()      const { return std::string(m_nameBuffer); }
+
+    // Renders a read-only step preview for a given DSL string (no modal opened).
+    void renderPreview(const std::string& dsl);
 
 private:
     bool m_initialized = false;
@@ -50,18 +55,25 @@ private:
     char m_dslBuffer[4096] = {};
 
     // Visual step list.
-    // m_dslOnly=true when the DSL contains complex elements (groups, repeat specs)
-    // that can't be round-tripped through MacroStepItem.
     std::vector<MacroStepItem> m_steps;
-    bool m_dslOnly   = false;
-    int  m_activeStep = -1;   // index of the selected step, -1 = none
+    bool m_dslOnly    = false;
+
+    // Range selection: selAnchor = first clicked, selEnd = last clicked.
+    // Active step for editing = selEnd.
+    int  m_selAnchor  = -1;
+    int  m_selEnd     = -1;
 
     // Step controls state
-    int  m_waitMsBuf = 200;   // ms for new Wait steps
+    int        m_waitMsBuf  = 200;   // ms for new Wait steps
+    RepeatSpec m_repeatSpec;         // repeat controls state
+    std::string m_repeatWarn;        // warning shown below repeat controls
 
     // DSL validation
     std::string m_validMsg;
     bool        m_validOk = false;
+
+    // Macro library snapshot (set by caller before open())
+    std::vector<std::pair<std::string,std::string>> m_macroLibrary;
 
     // Icon textures: image name -> PadTexture
     std::unordered_map<std::string, PadTexture> m_icons;
@@ -80,12 +92,20 @@ private:
     // Inserts 8 circular-direction Press steps (spin preset).
     void addSpinSteps(bool clockwise, bool analog, bool rightStick);
 
+    // Inserts a fixed directional sequence (motion preset: QCF, HCF, etc.).
+    // indices: array of kDpad/kAnalog indices in order; count: array length.
+    void addMotionSteps(const int* indices, int count, bool analog, bool rightStick);
+
     // Returns true if the active step is a Press step that contains this token.
     bool isTokenInActiveStep(const std::string& token) const;
 
     void renderTokenPicker();
+    void renderInsertMacro();
     void renderActiveStepControls();
     void renderDslField();
+    void renderReference();
+    void createRepeat();   // applies m_repeatSpec to current selection
+    void insertMacroRef(const std::string& name, const std::string& dsl);
 
     // Renders one icon as a toggle button reflecting the active-step token state.
     bool renderIconToggle(const std::string& imgName,
@@ -98,6 +118,14 @@ private:
                           bool               clockwise,
                           bool               analog,
                           bool               rightStick);
+
+    // Renders a motion preset button. Calls addMotionSteps on click.
+    void renderMotionButton(const std::string& imgName,
+                            const char*        tooltip,
+                            const int*         indices,
+                            int                count,
+                            bool               analog,
+                            bool               rightStick);
 
     ImTextureID iconSrv(const std::string& name) const;
 };

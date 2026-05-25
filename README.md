@@ -314,6 +314,37 @@ Profiles are **controller-agnostic** — keys use the virtual button name (`phys
 
 ---
 
+## Macro Library
+
+Open from the **Pads tab → Macros button**. Macros are stored in `data/macros.json` and are reusable across any controller or game profile.
+
+### Left panel
+
+Lists all macros in the library. Selecting one shows a visual step preview (chips with button icons) directly in the panel.
+
+| Button | Action |
+|---|---|
+| **New** | Opens the editor with a blank macro |
+| **Edit** | Opens the selected macro in the editor |
+| **Copy** | Duplicates the selected macro as a starting point |
+| **Delete** | Removes the selected macro from the library |
+
+### Visual editor
+
+The editor modal lets you build macros without writing DSL by hand:
+
+- **Token picker** — face buttons, d-pad directions, analog stick positions, and motion presets (QCF/HCF for d-pad and both analog sticks). Click an icon to create a new Press step; click it again on a selected step to add the token as a simultaneous combo.
+- **Step sequence** — each step is displayed as a chip. Click a chip to select it; click another to extend the selection range.
+- **Repeat controls** — with one or more steps selected, wrap them in a loop (ms), count-based repeat (`N times in ms`), while-held, or toggle.
+- **Hold ms** — with a Press step selected, sets how long the button is held (default 80ms).
+- **DSL field** — the raw macro string is always visible and editable. Editing it directly activates complex mode for arbitrarily advanced macros.
+
+Changes are written to `data/macros.json` and hot-reloaded immediately — no restart required.
+
+See [MACROS.md](MACROS.md) for the complete DSL syntax and a full editor reference.
+
+---
+
 ## Layout Editor
 
 The **Layout** tab provides a visual editor for `data/pad_layouts.json`.

@@ -41,5 +41,4 @@ private:
     void showToast(const char* key);
     void renderList();
     void renderActions();
-    void renderReference();
 };

@@ -21,6 +21,89 @@ Si el botón tiene `"execution"` inline, se usa directamente. Si no, el engine b
 
 ---
 
+## Editor visual de macros
+
+Accesible desde **pestaña Pads → botón Macros**. El panel izquierdo lista todas las macros de `data/macros.json` con una vista previa visual de los steps de la macro seleccionada. Usa **Nuevo**, **Editar** o **Copiar** para abrir el editor.
+
+### Construir steps con el selector de tokens
+
+- **Click en un icono** → crea un nuevo step Press al final de la secuencia (sin selección)
+- **Click en un step** de la secuencia → lo selecciona (resaltado azul)
+- **Click en un icono con un step Press seleccionado** → añade ese token al step (combo simultáneo)
+- **Click en el mismo icono otra vez** → elimina ese token del step seleccionado
+- **Eliminar el último token** de un step → elimina el step
+
+La secuencia muestra los combos como `[→]+[A]`, igual que el DSL `CR + A`.
+
+### Secciones del selector
+
+| Sección | Contenido |
+|---|---|
+| **Botones** | Botones de cara, bumpers, gatillos, clicks de stick, Start / Select |
+| **Cruz** | 8 direcciones · Spin CCW/CW · HCF ← · HCF → · QCF ← · QCF → |
+| **Analógico L / R** | 8 direcciones por stick · Spin CCW/CW · HCF ← · HCF → · QCF ← · QCF → |
+| **Macros** | Insertar macro de la biblioteca (MacroRef) |
+
+### Tipos de step
+
+| Tipo | Cómo crearlo |
+|---|---|
+| **Press** | Click en cualquier icono de botón/dirección |
+| **Wait** | Introducir ms → "Añadir espera" |
+| **Group** | Seleccionar rango de steps → elegir modo de repetición → "Crear repetición" |
+| **MacroRef** | "Insertar macro..." → elegir de la biblioteca |
+
+**Hold ms** — con un step Press seleccionado, fija cuánto tiempo se mantiene el botón. Por defecto 0 usa `DEFAULT_PRESS_MS` (80ms).
+
+### Controles de repetición
+
+Con uno o más steps seleccionados, elige un modo y pulsa **Crear repetición**:
+
+| Modo | DSL | Descripción |
+|---|---|---|
+| Bucle (ms) | `*5000` | Repite durante N milisegundos |
+| N veces en (ms) | `*1000/10` | Exactamente N repeticiones en N ms |
+| Mientras pulsado | `*UP` | Repite mientras el botón físico esté pulsado |
+| Alternar | `*DO` | Primera pulsación arranca, segunda para |
+
+Selección de **un solo step** → aplica el repeat directamente: `A*UP`.
+Selección de **un rango** → envuelve los steps en un Group: `(A, B, C)*5000`.
+
+### Presets de spin
+
+Los botones de spin (CCW / CW) insertan 8 steps Press en orden circular a **30ms cada uno**. El spin de cruceta arranca en Derecha (CW) o Izquierda (CCW); los de analógico hacen lo mismo para el stick L y R por separado. Útil para macros de rotación (ver ejemplo Lulu Overdrive).
+
+### Presets de movimiento
+
+Secuencias direccionales predefinidas para juegos de lucha (**40ms por paso**):
+
+| Botón | Secuencia | Tokens | Uso |
+|---|---|---|---|
+| HCF ← | Medio círculo izquierda | CR → CDR → CD → CDL → CL | Half-circle back |
+| HCF → | Medio círculo derecha | CL → CDL → CD → CDR → CR | Half-circle forward |
+| QCF ← | Cuarto de círculo izquierda | CD → CDL → CL | Quarter-circle back |
+| QCF → | Cuarto de círculo derecha | CD → CDR → CR | Quarter-circle forward |
+
+Disponibles para cruceta y analógico (stick L y R). Para un movimiento especial completo: inserta el preset de movimiento, luego haz click en el icono del botón de ataque para añadirlo como step separado. Ajusta los tiempos con Hold ms.
+
+### Insertar macro (MacroRef)
+
+**Insertar macro...** abre un desplegable con todas las macros de la biblioteca. Al seleccionar una, su DSL completo se inserta **inline** al final de la secuencia (expandido en el momento de insertar — ediciones posteriores a la macro original no afectan a quien la referenció).
+
+### Campo DSL
+
+El DSL en bruto siempre es visible y editable bajo los steps. Editarlo manualmente activa el **modo complejo**: la lista visual de steps se oculta y los clicks en iconos añaden tokens directamente al string DSL. El modo complejo permite macros arbitrariamente avanzadas manteniendo el picker para inserciones rápidas.
+
+### Guardar
+
+Da nombre a la macro y pulsa **Guardar**. La macro se escribe en `data/macros.json` y el engine la recarga en caliente — no hace falta reiniciar.
+
+---
+
+## Referencia DSL
+
+---
+
 ## Tokens — Botones
 
 | Token | Botón                     |

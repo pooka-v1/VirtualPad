@@ -3,7 +3,9 @@
 
 TEST_CASE("MacroParser: Empty string throws", "[MacroParser]") {
     Macro macro;
-    REQUIRE_THROWS_AS(MacroParser::parse("", macro), std::runtime_error);
+    bool threw = false;
+    try { MacroParser::parse("", macro); } catch (const std::runtime_error&) { threw = true; } catch (...) {}
+    CHECK(threw);
 }
 
 TEST_CASE("MacroParser: Simple button sequence", "[MacroParser]") {
@@ -98,17 +100,29 @@ TEST_CASE("MacroParser: Bare number is a wait with no steps", "[MacroParser]") {
 
 TEST_CASE("MacroParser: Unknown token throws", "[MacroParser]") {
     Macro macro;
-    REQUIRE_THROWS_AS(MacroParser::parse("INVALID_TOKEN", macro), std::runtime_error);
+    bool threw = false;
+    try { MacroParser::parse("INVALID_TOKEN", macro); } catch (const std::runtime_error&) { threw = true; } catch (...) {}
+    CHECK(threw);
 }
 
 TEST_CASE("MacroParser: Unknown repeat keyword throws", "[MacroParser]") {
     Macro macro;
-    REQUIRE_THROWS_AS(MacroParser::parse("(A, B)*INVALID", macro), std::runtime_error);
+    bool threw = false;
+    try { MacroParser::parse("(A, B)*INVALID", macro); } catch (const std::runtime_error&) { threw = true; } catch (...) {}
+    CHECK(threw);
 }
 
-TEST_CASE("MacroParser: Negative hold throws", "[MacroParser]") {
+TEST_CASE("MacroParser: Negative hold is rejected", "[MacroParser]") {
+    // REQUIRE_THROWS_AS causes SIGSEGV in this specific path under MSVC+Catch2.
+    // Manual try-catch is equivalent and stable.
     Macro macro;
-    REQUIRE_THROWS_AS(MacroParser::parse("A=-100", macro), std::runtime_error);
+    bool threw = false;
+    try {
+        MacroParser::parse("A=-100", macro);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    } catch (...) {}
+    CHECK(threw);
 }
 
 TEST_CASE("MacroParser: Zero total time is valid, not a throw", "[MacroParser]") {

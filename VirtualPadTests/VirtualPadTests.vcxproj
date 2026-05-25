@@ -132,10 +132,12 @@
     <ClCompile Include="..\VirtualPad\config\ConfigLoader.cpp" />
     <ClCompile Include="..\VirtualPad\macros\Macro.cpp" />
     <ClCompile Include="..\VirtualPad\macros\MacroParser.cpp" />
+    <ClCompile Include="..\VirtualPad\ui\MacroStep.cpp" />
     <ClCompile Include="..\VirtualPad\ui\MappingModel.cpp" />
     <ClCompile Include="catch2\catch_amalgamated.cpp" />
     <ClCompile Include="tests\test_ConfigLoader.cpp" />
     <ClCompile Include="tests\test_MacroParser.cpp" />
+    <ClCompile Include="tests\test_MacroStep.cpp" />
     <ClCompile Include="tests\test_MappingModel.cpp" />
   </ItemGroup>
   <ItemGroup>
