@@ -1,7 +1,7 @@
 {
     "virtual_vid": "5650",
     "virtual_pid": "0001",
-    "log_level": "debug",
+    "log_level": "info",
     "locale": "es",
     "font_size": 17.0,
     "pad_configurations": {
