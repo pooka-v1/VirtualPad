@@ -309,6 +309,9 @@ void HIDInputSource::applyButtons(PCHAR buf, ULONG bufLen, GamepadState& state) 
         }
     }
     m_physicalState = physDisplay;
+    // Restore axis values overwritten by the button-only physDisplay assignment.
+    // applyAxes() already wrote stickId axes to m_physicalState, but physDisplay zeroed them.
+    buildPhysicalAxes(buf, bufLen);
 
     // Reset virtual button states before remapping so OR logic works correctly
     // regardless of unordered_map iteration order.

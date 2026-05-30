@@ -975,7 +975,7 @@ void savePadLayouts(const std::string& path, const std::vector<PadLayout>& layou
             if (!c.imageRight.empty()) jc["image_right"] = c.imageRight;
 
             writeColor4(jc, "color", c.colorR, c.colorG, c.colorB, c.colorA);
-            if (c.type == "button" || c.type == "stick" || c.type == "dpad") {
+            if (c.type == "button" || c.type == "stick" || c.type == "dpad" || c.type == "analog_dpad") {
                 writeColor4(jc, "active_color",
                             c.activeColorR, c.activeColorG, c.activeColorB, c.activeColorA);
                 if (c.type == "button") {
