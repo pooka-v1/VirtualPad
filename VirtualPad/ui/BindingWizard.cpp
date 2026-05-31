@@ -491,9 +491,11 @@ void BindingWizard::scanControllers() {
         c.productName    = h.productName;
         c.connectionType = h.connectionType;
         c.path           = h.path;
-        c.name = (existing && !existing->source_name.empty())
-                 ? existing->source_name
-                 : (h.productName.empty() ? "HID device" : h.productName);
+        // Hardware name takes priority — the config source_name may belong to a different
+        // model that shares VID/PID (e.g. Pro 2 config showing for a Zero 2 device).
+        c.name = !h.productName.empty() ? h.productName
+               : (existing && !existing->source_name.empty()) ? existing->source_name
+               : "HID device";
         m_controllers.push_back(std::move(c));
     }
 }
@@ -976,6 +978,8 @@ void BindingWizard::saveResult() {
     entry["layout_id"]   = m_layout.id;
     if (m_saveWithConnection && !ctrl.connectionType.empty())
         entry["connection"] = ctrl.connectionType;
+    if (!ctrl.productName.empty())
+        entry["product_name"] = ctrl.productName;
 
     // Buttons
     json buttons = json::object();
