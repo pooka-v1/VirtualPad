@@ -413,7 +413,11 @@ void PadEngine::threadFunc() {
                 for (auto& h : hidEntries) {
                     if (vpCfg.vid && h.vid == vpCfg.vid && h.pid == vpCfg.pid) continue;
                     const ControllerConfig* c = findConfig(configs, h.vid, h.pid, h.connectionType, "", h.productName);
-                    if (!c || c->mode != "hid") continue;
+                    if (!c || c->mode != "hid") {
+                        spdlog::debug("[Scan] No config: VID={:04X} PID={:04X} conn='{}' name='{}'",
+                                      h.vid, h.pid, h.connectionType, h.productName);
+                        continue;
+                    }
                     DeviceCandidate dc;
                     dc.hidPath        = h.path;
                     dc.vid            = h.vid;

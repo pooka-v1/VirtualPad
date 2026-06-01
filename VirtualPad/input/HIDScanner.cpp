@@ -1,4 +1,5 @@
 #include "HIDScanner.h"
+#include "../Log.h"
 #include <setupapi.h>
 #include <hidsdi.h>
 #include <cfgmgr32.h>
@@ -65,6 +66,16 @@ std::vector<HIDScanner::DeviceInfo> HIDScanner::scan() {
         if (status != HIDP_STATUS_SUCCESS
             || caps.UsagePage != 0x01
             || (caps.Usage != 0x04 && caps.Usage != 0x05)) {
+            if (spdlog::should_log(spdlog::level::debug)) {
+                wchar_t nb[256] = {};
+                char filteredName[512] = {};
+                if (HidD_GetProductString(h, nb, sizeof(nb)))
+                    WideCharToMultiByte(CP_UTF8, 0, nb, -1, filteredName, sizeof(filteredName), nullptr, nullptr);
+                spdlog::debug("[HIDScanner] Skipped (not gamepad): VID={:04X} PID={:04X} "
+                              "UsagePage={:04X} Usage={:04X} name='{}'",
+                              attribs.VendorID, attribs.ProductID,
+                              caps.UsagePage, caps.Usage, filteredName);
+            }
             CloseHandle(h);
             continue;
         }

@@ -820,6 +820,10 @@
           "physical": "select",
           "virtual": "select"
         },
+        "12": {
+          "physical": "start",
+          "virtual": "start"
+        },
         "2": {
           "physical": "b",
           "virtual": "b"
@@ -829,8 +833,8 @@
           "virtual": "x"
         },
         "5": {
-          "physical": "start",
-          "virtual": "start"
+          "physical": "y",
+          "virtual": "y"
         },
         "7": {
           "physical": "l1",
@@ -844,6 +848,73 @@
       "layout_id": "8BitDo-Zero2",
       "mode": "hid",
       "pid": "3230",
+      "product_name": "8BitDo Zero 2 gamepad",
+      "source_name": "8BitDo Zero 2 gamepad",
+      "vid": "2DC8"
+    },
+    {
+      "axes": {
+        "hid_x": {
+          "invert": false,
+          "target": "left_x"
+        },
+        "hid_y": {
+          "invert": true,
+          "target": "left_y"
+        }
+      },
+      "axis_actions": {
+        "left_x_neg": {
+          "virtual": "dpad_left"
+        },
+        "left_x_pos": {
+          "virtual": "dpad_right"
+        },
+        "left_y_neg": {
+          "virtual": "dpad_down"
+        },
+        "left_y_pos": {
+          "virtual": "dpad_up"
+        }
+      },
+      "buttons": {
+        "1": {
+          "physical": "a",
+          "virtual": "a"
+        },
+        "11": {
+          "physical": "select",
+          "virtual": "select"
+        },
+        "12": {
+          "physical": "start",
+          "virtual": "start"
+        },
+        "2": {
+          "physical": "b",
+          "virtual": "b"
+        },
+        "4": {
+          "physical": "x",
+          "virtual": "x"
+        },
+        "5": {
+          "physical": "y",
+          "virtual": "y"
+        },
+        "7": {
+          "physical": "l1",
+          "virtual": "l1"
+        },
+        "8": {
+          "physical": "r1",
+          "virtual": "r1"
+        }
+      },
+      "connection": "usb",
+      "layout_id": "8BitDo-Zero2",
+      "mode": "hid",
+      "pid": "9018",
       "product_name": "8BitDo Zero 2 gamepad",
       "source_name": "8BitDo Zero 2 gamepad",
       "vid": "2DC8"
