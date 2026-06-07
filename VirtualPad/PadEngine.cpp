@@ -257,6 +257,11 @@ std::string PadEngine::getProfilePath() const {
     return m_profilePath;
 }
 
+std::vector<std::string> PadEngine::getLoadedBotNames() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_loadedBotNames;
+}
+
 std::string PadEngine::getActiveProfileName() const {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_activeProfileName;
@@ -575,6 +580,8 @@ void PadEngine::threadFunc() {
         std::unordered_map<std::string, std::string> axisMacroNames;
         std::unordered_map<std::string, bool>        axisKbPrev;
         std::unordered_map<std::string, bool>        axisMousePrev;
+        std::unordered_map<std::string, std::string> axisBotNames;  // key → bot name
+        std::unordered_map<std::string, bool>        axisBotPrev;   // key → prev active state
         // Axis Ranges: prev active ButtonAction per key (nullopt = nothing was active)
         std::unordered_map<std::string, std::optional<ButtonAction>> axisRangePrev;
         // Axis Range macros: composite key = "axis_key|macro_name"
@@ -587,6 +594,8 @@ void PadEngine::threadFunc() {
         std::unordered_map<std::string, std::string> dpadMacroNames;
         std::unordered_map<std::string, bool>        dpadKbPrev;
         std::unordered_map<std::string, bool>        dpadMousePrev;
+        std::unordered_map<std::string, std::string> dpadBotNames;  // dir → bot name
+        std::unordered_map<std::string, bool>        dpadBotPrev;   // dir → prev active state
 
         // Trigger-as-source state
         float trigLPrev = 0.0f;           // previous frame physical trigger L value
@@ -599,6 +608,8 @@ void PadEngine::threadFunc() {
         bool  trigRKbPrev   = false;
         bool  trigLMousPrev = false;      // previous active state for mouse trigger L
         bool  trigRMousPrev = false;
+        bool  trigLBotPrev  = false;      // previous active state for bot-toggle trigger L
+        bool  trigRBotPrev  = false;
         // Ranged trigger state (indexed by range position in triggerLRanges/triggerRRanges)
         // uint8_t instead of bool to avoid std::vector<bool> proxy reference issues
         std::vector<uint8_t> trigLRangePrev;
@@ -614,8 +625,10 @@ void PadEngine::threadFunc() {
             kbPrevBtn.clear();   mousePrevBtn.clear();
             axisMacros.clear();  axisMacroPrev.clear(); axisMacroNames.clear();
             axisKbPrev.clear();  axisMousePrev.clear();
+            axisBotNames.clear(); axisBotPrev.clear();
             dpadMacros.clear();  dpadMacroPrev.clear(); dpadMacroNames.clear();
             dpadKbPrev.clear();  dpadMousePrev.clear();
+            dpadBotNames.clear(); dpadBotPrev.clear();
             for (const auto& [bit, action] : cfg->buttons) {
                 if (action.type == ButtonActionType::Keyboard)   kbPrevBtn[bit]    = false;
                 if (action.type == ButtonActionType::MouseClick) mousePrevBtn[bit] = false;
@@ -630,6 +643,11 @@ void PadEngine::threadFunc() {
             for (const auto& [key, action] : cfg->axis_actions) {
                 if (action.type == HalfAxisActionType::Keyboard)   axisKbPrev[key]    = false;
                 if (action.type == HalfAxisActionType::MouseClick) axisMousePrev[key] = false;
+                if (action.type == HalfAxisActionType::Bot) {
+                    axisBotNames[key] = action.target;
+                    axisBotPrev[key]  = false;
+                    spdlog::info("Bot '{}' assigned to axis direction {}.", action.target, key);
+                }
                 if (action.type == HalfAxisActionType::Ranges) {
                     axisRangePrev[key] = std::nullopt;
                     for (const auto& r : action.ranges) {
@@ -660,6 +678,12 @@ void PadEngine::threadFunc() {
                 botBits[bit]    = action.name;
                 botBtnPrev[bit] = false;
                 spdlog::info("Bot '{}' assigned to button {}.", action.name, bit);
+            }
+            for (const auto& [dir, action] : cfg->dpadActions) {
+                if (action.type != ButtonActionType::Bot) continue;
+                dpadBotNames[dir] = action.name;
+                dpadBotPrev[dir]  = false;
+                spdlog::info("Bot '{}' assigned to dpad {}.", action.name, dir);
             }
             for (const auto& [bit, action] : cfg->buttons) {
                 if (action.type != ButtonActionType::Macro) continue;
@@ -737,6 +761,7 @@ void PadEngine::threadFunc() {
             // Trigger-as-source state reset
             trigLPrev = trigRPrev = 0.0f;
             trigLKbPrev = trigRKbPrev = trigLMousPrev = trigRMousPrev = false;
+            trigLBotPrev = trigRBotPrev = false;
             trigLMacroOk = trigRMacroOk = false;
             // Simple trigger macros
             auto initTrigMacro = [&](const ButtonAction& act, Macro& mac, bool& ok) {
@@ -791,6 +816,12 @@ void PadEngine::threadFunc() {
 
         BotLoader botLoader;
         botLoader.scan("data/bots");
+        {
+            std::vector<std::string> names;
+            for (const auto& b : botLoader.bots()) names.push_back(b->name);
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_loadedBotNames = std::move(names);
+        }
         for (const auto& bname : cfgBase->context_bots) {
             if (auto* b = botLoader.find(bname)) {
                 b->start();
@@ -1094,6 +1125,21 @@ void PadEngine::threadFunc() {
                     prev = active;
                 }
 
+                for (auto& [key, prev] : axisBotPrev) {
+                    bool active = activeAASet.count(key) > 0;
+                    if (active && !prev) {
+                        const std::string& botName = axisBotNames[key];
+                        if (auto* b = botLoader.find(botName)) {
+                            b->toggle();
+                            spdlog::info("[BOT] '{}' {}", botName, b->isActive() ? "ON" : "OFF");
+                            pushEvent({ PadEventType::BotToggle, botName, b->isActive() });
+                        } else {
+                            spdlog::warn("[BOT] '{}' not loaded.", botName);
+                        }
+                    }
+                    prev = active;
+                }
+
                 // Axis Ranges: Keyboard / MouseClick / Macro edge-triggered per range action
                 {
                     const auto& rangeActions = input->getActiveAxisRangeActions();
@@ -1143,6 +1189,14 @@ void PadEngine::threadFunc() {
                                     else
                                         mit->second.toggle();
                                     pushEvent({ PadEventType::MacroToggle, cur.name, mit->second.isActive() });
+                                }
+                            } else if (cur.type == ButtonActionType::Bot) {
+                                if (auto* b = botLoader.find(cur.name)) {
+                                    b->toggle();
+                                    spdlog::info("[BOT] '{}' {}", cur.name, b->isActive() ? "ON" : "OFF");
+                                    pushEvent({ PadEventType::BotToggle, cur.name, b->isActive() });
+                                } else {
+                                    spdlog::warn("[BOT] '{}' not loaded.", cur.name);
                                 }
                             }
                             prev = cur;
@@ -1223,6 +1277,26 @@ void PadEngine::threadFunc() {
                     if (dir == "right") state.dpadRight = false;
                 }
             }
+            for (auto& [dir, prev] : dpadBotPrev) {
+                bool active = dpadActive(dir);
+                if (active && !prev) {
+                    const std::string& botName = dpadBotNames[dir];
+                    if (auto* b = botLoader.find(botName)) {
+                        b->toggle();
+                        spdlog::info("[BOT] '{}' {}", botName, b->isActive() ? "ON" : "OFF");
+                        pushEvent({ PadEventType::BotToggle, botName, b->isActive() });
+                    } else {
+                        spdlog::warn("[BOT] '{}' not loaded.", botName);
+                    }
+                }
+                prev = active;
+                if (active) {
+                    if (dir == "up")    state.dpadUp    = false;
+                    if (dir == "down")  state.dpadDown  = false;
+                    if (dir == "left")  state.dpadLeft  = false;
+                    if (dir == "right") state.dpadRight = false;
+                }
+            }
             // Dpad direction → virtual trigger (L2/R2)
             for (const auto& [dir, action] : cfg->dpadActions) {
                 if (action.type != ButtonActionType::Trigger) continue;
@@ -1245,7 +1319,7 @@ void PadEngine::threadFunc() {
             // After the call, the source trigger value in state has been routed/cleared.
             auto applyTrigAct = [&](float physVal, const ButtonAction& act,
                                      bool& kbPrev, bool& mousPrev, Macro& mac, bool macOk,
-                                     float& srcTrig) {
+                                     bool& botPrev, float& srcTrig) {
                 bool active = (physVal > kTrigActThresh);
                 switch (act.type) {
                 case ButtonActionType::TriggerPassthrough: {
@@ -1301,6 +1375,19 @@ void PadEngine::threadFunc() {
                     if (macOk && mac.isActive()) mac.tick(state);
                     srcTrig = 0.0f;
                     break;
+                case ButtonActionType::Bot:
+                    if (active && !botPrev) {
+                        if (auto* b = botLoader.find(act.name)) {
+                            b->toggle();
+                            spdlog::info("[BOT] '{}' {}", act.name, b->isActive() ? "ON" : "OFF");
+                            pushEvent({ PadEventType::BotToggle, act.name, b->isActive() });
+                        } else {
+                            spdlog::warn("[BOT] '{}' not loaded.", act.name);
+                        }
+                    }
+                    botPrev = active;
+                    srcTrig = 0.0f;
+                    break;
                 default: break;
                 }
             };
@@ -1321,7 +1408,7 @@ void PadEngine::threadFunc() {
                 float physL = lNeedsPhys ? input->getPhysicalState().triggerL : state.triggerL;
                 applyTrigAct(physL, lAct,
                              trigLKbPrev, trigLMousPrev, trigLMacro, trigLMacroOk,
-                             state.triggerL);
+                             trigLBotPrev, state.triggerL);
                 if (lAct.type == ButtonActionType::TriggerPassthrough &&
                     lAct.target == "r2" && physL > 0.0f)
                     trigRWasCrossTarget = true;
@@ -1334,7 +1421,7 @@ void PadEngine::threadFunc() {
                 float physR = rNeedsPhys ? input->getPhysicalState().triggerR : state.triggerR;
                 applyTrigAct(physR, rAct,
                              trigRKbPrev, trigRMousPrev, trigRMacro, trigRMacroOk,
-                             state.triggerR);
+                             trigRBotPrev, state.triggerR);
                 if (rAct.type == ButtonActionType::TriggerPassthrough &&
                     rAct.target == "l2" && physR > 0.0f)
                     trigLWasCrossTarget = true;
@@ -1386,6 +1473,17 @@ void PadEngine::threadFunc() {
                         }
                         if (i < rangeMacs.size() && rangeMacOk[i] && rangeMacs[i].isActive())
                             rangeMacs[i].tick(state);
+                        break;
+                    case ButtonActionType::Bot:
+                        if (active && !prev) {
+                            if (auto* b = botLoader.find(act.name)) {
+                                b->toggle();
+                                spdlog::info("[BOT] '{}' {}", act.name, b->isActive() ? "ON" : "OFF");
+                                pushEvent({ PadEventType::BotToggle, act.name, b->isActive() });
+                            } else {
+                                spdlog::warn("[BOT] '{}' not loaded.", act.name);
+                            }
+                        }
                         break;
                     default: break;
                     }

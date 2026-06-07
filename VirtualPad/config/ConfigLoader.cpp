@@ -112,6 +112,9 @@ static std::unordered_map<std::string, HalfAxisAction> parseAxisActionsJson(cons
                 a.type      = HalfAxisActionType::Macro;
                 a.target    = val.value("name", val.value("target", std::string{}));
                 a.execution = val.value("execution", std::string{});
+            } else if (type == "bot") {
+                a.type   = HalfAxisActionType::Bot;
+                a.target = val.value("name", val.value("target", std::string{}));
             } else if (type == "mouse_click") {
                 a.type        = HalfAxisActionType::MouseClick;
                 a.mouseButton = val.value("button", "left");
@@ -598,6 +601,8 @@ static std::optional<VirtualTarget> halfAxisActionToVT(const HalfAxisAction& act
             return VirtualKeyboard{};
         case HalfAxisActionType::Macro:
             return VirtualMacro{action.target};
+        case HalfAxisActionType::Bot:
+            return VirtualBot{action.target};
         case HalfAxisActionType::MouseClick:
             return VirtualMouseClick{stringToMouseButton2(action.mouseButton)};
         case HalfAxisActionType::MouseMove:

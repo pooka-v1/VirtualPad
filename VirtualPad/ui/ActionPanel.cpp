@@ -138,6 +138,44 @@ bool renderMacroCombo(const char* contextId, std::string& sel,
 }
 
 // ---------------------------------------------------------------------------
+bool renderBotCombo(const char* contextId, std::string& sel,
+                    const std::vector<std::string>& names, float availW,
+                    const char* extraLabel, bool* extraClicked) {
+    float sp      = ImGui::GetStyle().ItemSpacing.x;
+    float comboW  = 220.0f;
+    float assignW = 80.0f;
+    float extraW  = extraLabel ? (ImGui::CalcTextSize(extraLabel).x + 16.0f) : 0.0f;
+    float totalW  = comboW + sp + assignW + (extraLabel ? sp + extraW : 0.0f);
+    float off     = (availW - totalW) * 0.5f;
+    if (off > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + off);
+
+    ImGui::PushID(contextId);
+    ImGui::SetNextItemWidth(comboW);
+    const char* preview = sel.empty() ? tr("action.pick_bot") : sel.c_str();
+    if (ImGui::BeginCombo("##combo", preview)) {
+        for (const auto& name : names) {
+            bool selected = (name == sel);
+            if (ImGui::Selectable(name.c_str(), selected)) sel = name;
+            if (selected) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    bool canA = !sel.empty();
+    if (!canA) ImGui::BeginDisabled();
+    bool result = ImGui::Button(tr("btn.assign"), {assignW, 0.0f}) && canA;
+    if (!canA) ImGui::EndDisabled();
+    if (extraLabel) {
+        ImGui::SameLine();
+        bool ex = ImGui::Button(extraLabel, {extraW, 0.0f});
+        if (extraClicked) *extraClicked = ex;
+    }
+    ImGui::PopID();
+
+    return result;
+}
+
+// ---------------------------------------------------------------------------
 bool renderMouseButtons(const char* contextId, std::string& result, float availW) {
     static const struct { const char* key; const char* name; } kBtns[] = {
         {"action.mouse_left",    "left"},

@@ -41,6 +41,7 @@ enum class HalfAxisActionType {
     Analog,         // { "type": "analog" }           — proportional stick-to-stick (legacy)
     Keyboard,       // { "type": "keyboard" }
     Macro,          // { "type": "macro" }
+    Bot,            // { "type": "bot", "name": "..." } — toggles a bot plugin on/off
     MouseClick,     // { "type": "mouse_click" }      — digital mouse button
     MouseMove,      // { "target": "mouse_x|mouse_y" } — proportional mouse movement
     Ranges          // { "ranges": [...] }             — ranged actions

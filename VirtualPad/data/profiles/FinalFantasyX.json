@@ -32,5 +32,8 @@
       "type": "macro"
     }
   },
+  "context_bots": [
+    "LightningBot"
+  ],
   "profile_name": "Final Fantasy X"
 }

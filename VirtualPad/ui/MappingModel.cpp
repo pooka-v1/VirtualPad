@@ -16,6 +16,7 @@ void MappingModel::clear() {
     trigLRangeEdits.clear();
     trigRRangeEdits.clear();
     stickSlotEdits.clear();
+    contextBotsEdits.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -91,6 +92,7 @@ void MappingModel::loadProfile(const ControllerConfig& base, const GameProfile& 
     vid = base.vid;
     pid = base.pid;
     reloadFromConfig(applyProfile(base, profile));
+    contextBotsEdits = profile.context_bots;
 }
 
 // ---------------------------------------------------------------------------
@@ -125,6 +127,8 @@ void MappingModel::saveProfile(const std::string& path, const std::string& profi
         if (act.type == ButtonActionType::Macro) {
             j["type"] = "macro"; j["name"] = act.name;
             if (!act.execution.empty()) j["execution"] = act.execution;
+        } else if (act.type == ButtonActionType::Bot) {
+            j["type"] = "bot"; j["name"] = act.name;
         } else if (act.type == ButtonActionType::Keyboard) {
             j["type"] = "keyboard";
             json arr = json::array();
@@ -161,6 +165,8 @@ void MappingModel::saveProfile(const std::string& path, const std::string& profi
     root["profile_name"] = profileName;
     if (buttonsJson.empty()) root.erase("buttons");
     else                     root["buttons"] = buttonsJson;
+    if (contextBotsEdits.empty()) root.erase("context_bots");
+    else                          root["context_bots"] = contextBotsEdits;
 
     // Remove legacy overrides array if present.
     root.erase("overrides");
@@ -228,6 +234,10 @@ void MappingModel::save(const std::string& path) {
                     if (!act.execution.empty()) newBtn["execution"] = act.execution;
                     else newBtn.erase("execution");
                     newBtn.erase("keys"); newBtn.erase("button");
+                } else if (act.type == ButtonActionType::Bot) {
+                    newBtn["type"] = "bot";
+                    newBtn["name"] = act.name;
+                    newBtn.erase("keys"); newBtn.erase("button"); newBtn.erase("execution");
                 } else if (act.type == ButtonActionType::Trigger) {
                     newBtn["type"]   = "trigger";
                     newBtn["target"] = act.target;
@@ -274,6 +284,9 @@ void MappingModel::save(const std::string& path) {
                         actJson["type"] = "macro";
                         actJson["name"] = act.name;
                         if (!act.execution.empty()) actJson["execution"] = act.execution;
+                    } else if (act.type == ButtonActionType::Bot) {
+                        actJson["type"] = "bot";
+                        actJson["name"] = act.name;
                     } else if (act.type == ButtonActionType::Trigger) {
                         actJson["type"]   = "trigger";
                         actJson["target"] = act.target;
@@ -312,6 +325,9 @@ void MappingModel::save(const std::string& path) {
                     j["type"] = "macro";
                     j["name"] = act.name;
                     if (!act.execution.empty()) j["execution"] = act.execution;
+                } else if (act.type == ButtonActionType::Bot) {
+                    j["type"] = "bot";
+                    j["name"] = act.name;
                 } else if (act.type == ButtonActionType::Trigger) {
                     j["type"]   = "trigger";
                     j["target"] = act.target;
@@ -414,6 +430,10 @@ void MappingModel::save(const std::string& path) {
                     j["name"] = ha.target;
                     if (!ha.execution.empty()) j["execution"] = ha.execution;
                     break;
+                case HalfAxisActionType::Bot:
+                    j["type"] = "bot";
+                    j["name"] = ha.target;
+                    break;
                 case HalfAxisActionType::MouseClick:
                     j["type"]   = "mouse_click";
                     j["button"] = ha.mouseButton;
@@ -449,6 +469,9 @@ void MappingModel::save(const std::string& path) {
                                 actj["button"] = act.mouseButton;
                             } else if (act.type == ButtonActionType::Macro) {
                                 actj["type"] = "macro";
+                                actj["name"] = act.name;
+                            } else if (act.type == ButtonActionType::Bot) {
+                                actj["type"] = "bot";
                                 actj["name"] = act.name;
                             }
                             rj["action"] = actj;
