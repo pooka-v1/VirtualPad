@@ -459,10 +459,11 @@ void MappingModel::save(const std::string& path) {
             if (!btn.is_object()) newBtn["physical"] = physShort;
             bool changed = false;
 
-            auto h5it = actionEdits.find(physShort);
-            if (h5it != actionEdits.end()) {
-                const ButtonAction& act = h5it->second;
+            auto actionEditIt = actionEdits.find(physShort);
+            if (actionEditIt != actionEdits.end()) {
+                const ButtonAction& act = actionEditIt->second;
                 newBtn.erase("virtual");
+                newBtn.erase("execution");
                 if (act.type == ButtonActionType::Keyboard) {
                     newBtn["type"] = "keyboard";
                     newBtn.erase("name");
@@ -477,12 +478,11 @@ void MappingModel::save(const std::string& path) {
                     newBtn["type"] = "macro";
                     newBtn["name"] = act.name;
                     if (!act.execution.empty()) newBtn["execution"] = act.execution;
-                    else newBtn.erase("execution");
                     newBtn.erase("keys"); newBtn.erase("button");
                 } else if (act.type == ButtonActionType::Bot) {
                     newBtn["type"] = "bot";
                     newBtn["name"] = act.name;
-                    newBtn.erase("keys"); newBtn.erase("button"); newBtn.erase("execution");
+                    newBtn.erase("keys"); newBtn.erase("button");
                 } else if (act.type == ButtonActionType::Trigger) {
                     newBtn["type"]   = "trigger";
                     newBtn["target"] = act.target;
@@ -495,6 +495,7 @@ void MappingModel::save(const std::string& path) {
                 if (it != buttonEdits.end()) {
                     newBtn.erase("type"); newBtn.erase("target");
                     newBtn.erase("keys"); newBtn.erase("button"); newBtn.erase("name");
+                    newBtn.erase("execution");
                     if (it->second.empty())
                         newBtn.erase("virtual");
                     else
