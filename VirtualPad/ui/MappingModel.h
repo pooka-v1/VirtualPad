@@ -56,6 +56,9 @@ public:
     // Stick slot assignments: slot key → source name.
     std::unordered_map<std::string, std::string> stickSlotEdits;
 
+    // Bots to start automatically while this profile is active (profile mode only).
+    std::vector<std::string> contextBotsEdits;
+
     // Populate edits from the matching config entry (vid/pid must be set first).
     void reload(const std::vector<ControllerConfig>& configs);
 

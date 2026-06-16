@@ -178,11 +178,13 @@
     "action": {
         "press_keys":    "(pulsa teclas...)",
         "pick_macro":    "-- elige macro --",
+        "pick_bot":      "-- elige bot --",
         "pick_button":   "-- elige boton --",
         "no_id":         "(sin ID)",
         "ranges_header": "Zonas de recorrido",
         "type_gamepad":  "Mando",
         "type_macro":    "Macro",
+        "type_bot":      "Bot",
         "type_keyboard": "Teclado",
         "type_mouse":    "Raton",
         "mouse_left":    "Izq",
@@ -280,6 +282,9 @@
         "name_label":     "Nombre",
         "btn_create":     "Crear",
         "toast_saved":    "Guardado",
-        "confirm_delete": "¿Eliminar este perfil? Esta accion no se puede deshacer."
+        "confirm_delete": "¿Eliminar este perfil? Esta accion no se puede deshacer.",
+        "bot_label":      "Bot del perfil:",
+        "bots_none":      "— Ninguno —",
+        "bots_hint":      "Bot que se inicia automáticamente mientras este perfil está activo."
     }
 }

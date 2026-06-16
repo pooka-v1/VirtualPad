@@ -42,6 +42,18 @@ bool renderMacroCombo(
     const char* extraLabel   = nullptr,
     bool*       extraClicked = nullptr);
 
+// Renders a bot combo + Asignar button:
+//   [-- elige bot --  ▼]  [Asignar]  [extraLabel?]
+// Returns true when Asignar is clicked with a non-empty selection.
+// extraLabel/extraClicked: optional extra button rendered on the same row.
+bool renderBotCombo(
+    const char* contextId,
+    std::string& sel,
+    const std::vector<std::string>& names,
+    float availW,
+    const char* extraLabel   = nullptr,
+    bool*       extraClicked = nullptr);
+
 // Renders 5 mouse buttons centered:
 //   [Izq] [Der] [Centro] [Atrás] [Adelante]
 // Returns true and sets `result` to "left"/"right"/"middle"/"x1"/"x2" on click.

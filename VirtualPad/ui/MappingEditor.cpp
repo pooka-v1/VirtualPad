@@ -245,6 +245,43 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
             }
         }
 
+        // Bot selector — single bot per profile. Right-aligned combo, set apart
+        // from save/delete so it doesn't read as part of that button group.
+        {
+            std::vector<std::string> availableBots = m_engine->getLoadedBotNames();
+            std::vector<const char*> botItems;
+            botItems.push_back(tr("profiles.bots_none"));
+            for (const auto& b : availableBots) botItems.push_back(b.c_str());
+
+            int botIdx = 0;  // 0 = none
+            if (!m_model.contextBotsEdits.empty()) {
+                auto it = std::find(availableBots.begin(), availableBots.end(),
+                                    m_model.contextBotsEdits.front());
+                if (it != availableBots.end())
+                    botIdx = 1 + (int)std::distance(availableBots.begin(), it);
+            }
+
+            const char* label      = tr("profiles.bot_label");
+            const float labelWidth = ImGui::CalcTextSize(label).x;
+            const float comboWidth = 180.0f;
+            const float groupWidth = labelWidth + ImGui::GetStyle().ItemSpacing.x + comboWidth;
+
+            ImGui::SameLine();
+            float avail = ImGui::GetContentRegionAvail().x;
+            if (avail > groupWidth)
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + avail - groupWidth);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(label);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(comboWidth);
+            if (ImGui::Combo("##profile_bot", &botIdx, botItems.data(), (int)botItems.size())) {
+                m_model.contextBotsEdits.clear();
+                if (botIdx > 0) m_model.contextBotsEdits.push_back(availableBots[botIdx - 1]);
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("%s", tr("profiles.bots_hint"));
+        }
+
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
@@ -362,6 +399,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                                     m_sel.actionType         = ActionType::Xbox;
                                     m_sel.captureKeys.clear();
                                     m_sel.macroSel.clear();
+                                    m_sel.botSel.clear();
                                     m_sel.h9HoldTriggerSrc.clear();
                                     m_sel.h9HoldTriggerTimer = 0.0f;
                                 }
@@ -1079,7 +1117,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                 : stateToShort(selPhysComp.state);
 
         float btnW   = 90.0f;
-        float totalW = btnW * 4 + ImGui::GetStyle().ItemSpacing.x * 3;
+        float totalW = btnW * 5 + ImGui::GetStyle().ItemSpacing.x * 4;
         float offX   = (availW - totalW) * 0.5f;
         if (offX > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX);
 
@@ -1092,14 +1130,16 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
             }
             if (sel) ImGui::PopStyleColor();
         };
-        char lblMacro[64], lblKeyboard[64], lblMouse[64];
+        char lblMacro[64], lblKeyboard[64], lblMouse[64], lblBot[64];
         snprintf(lblMacro,    sizeof(lblMacro),    "%s##btnMacro",  tr("action.type_macro"));
         snprintf(lblKeyboard, sizeof(lblKeyboard), "%s##btnKb",     tr("action.type_keyboard"));
         snprintf(lblMouse,    sizeof(lblMouse),    "%s##btnMouse",  tr("action.type_mouse"));
+        snprintf(lblBot,      sizeof(lblBot),      "%s##btnBot",    tr("action.type_bot"));
         typeBtn("Xbox##btnXbox", ActionType::Xbox);     ImGui::SameLine();
         typeBtn(lblMacro,        ActionType::Macro);    ImGui::SameLine();
         typeBtn(lblKeyboard,     ActionType::Keyboard); ImGui::SameLine();
-        typeBtn(lblMouse,        ActionType::Mouse);
+        typeBtn(lblMouse,        ActionType::Mouse);    ImGui::SameLine();
+        typeBtn(lblBot,          ActionType::Bot);
 
         ImGui::Spacing();
 
@@ -1133,7 +1173,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                     m_model.buttonEdits.erase(physShortSel);
                 }
                 m_sel.physComp = -1; m_sel.stickAsButton = false; m_sel.dpadDir.clear();
-                m_sel.actionType = ActionType::Xbox; m_sel.macroSel.clear();
+                m_sel.actionType = ActionType::Xbox; m_sel.macroSel.clear(); m_sel.botSel.clear();
             }
             if (editInlineMacro && !physShortSel.empty()) {
                 m_macroModalPending.ctx = MacroModalPending::Ctx::Button;
@@ -1174,6 +1214,24 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                 m_sel.physComp = -1; m_sel.stickAsButton = false; m_sel.dpadDir.clear();
                 m_sel.actionType = ActionType::Xbox;
             }
+
+        } else if (m_sel.actionType == ActionType::Bot) {
+            std::vector<std::string> availableBots = m_engine->getLoadedBotNames();
+            if (m_sel.botSel.empty() && !physShortSel.empty()) {
+                auto it = m_model.actionEdits.find(physShortSel);
+                if (it != m_model.actionEdits.end() && it->second.type == ButtonActionType::Bot)
+                    m_sel.botSel = it->second.name;
+            }
+            if (ActionPanel::renderBotCombo("botButton", m_sel.botSel, availableBots, availW)) {
+                if (!physShortSel.empty()) {
+                    ButtonAction act;
+                    act.type = ButtonActionType::Bot; act.physical = physShortSel; act.name = m_sel.botSel;
+                    m_model.actionEdits[physShortSel] = act;
+                    m_model.buttonEdits.erase(physShortSel);
+                }
+                m_sel.physComp = -1; m_sel.stickAsButton = false; m_sel.dpadDir.clear();
+                m_sel.actionType = ActionType::Xbox; m_sel.botSel.clear();
+            }
         }
     } // button action panel
     // ── Stick axis action panel ───────────────────────────────────────────────
@@ -1205,7 +1263,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
 
                 // Tab buttons
                 constexpr float kBtnW = 80.0f;
-                float totalW = kBtnW * 6 + ImGui::GetStyle().ItemSpacing.x * 5;
+                float totalW = kBtnW * 7 + ImGui::GetStyle().ItemSpacing.x * 6;
                 float offX = (availW - totalW) * 0.5f;
                 if (offX > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX);
                 auto renderTypeTab = [&](const char* label, ActionType type) {
@@ -1214,17 +1272,19 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                     if (ImGui::Button(label, { kBtnW, 0.0f })) { m_sel.actionType = type; m_sel.captureKeys.clear(); }
                     if (s) ImGui::PopStyleColor();
                 };
-                char lblGamepad[64], lblMacro[64], lblKeyboard[64], lblMouse[64], lblMouseMove[64];
+                char lblGamepad[64], lblMacro[64], lblKeyboard[64], lblMouse[64], lblMouseMove[64], lblBot[64];
                 snprintf(lblGamepad,   sizeof(lblGamepad),   "%s##axGamepad", tr("action.type_gamepad"));
                 snprintf(lblMacro,     sizeof(lblMacro),     "%s##axMacro",   tr("action.type_macro"));
                 snprintf(lblKeyboard,  sizeof(lblKeyboard),  "%s##axKb",      tr("action.type_keyboard"));
                 snprintf(lblMouse,     sizeof(lblMouse),     "%s##axMouse",   tr("action.type_mouse"));
                 snprintf(lblMouseMove, sizeof(lblMouseMove), "%s##axMMove",   tr("action.type_mousemove"));
+                snprintf(lblBot,       sizeof(lblBot),       "%s##axBot",     tr("action.type_bot"));
                 renderTypeTab(lblGamepad,   ActionType::Xbox);      ImGui::SameLine();
                 renderTypeTab(lblMacro,     ActionType::Macro);     ImGui::SameLine();
                 renderTypeTab(lblKeyboard,  ActionType::Keyboard);  ImGui::SameLine();
                 renderTypeTab(lblMouse,     ActionType::Mouse);     ImGui::SameLine();
                 renderTypeTab(lblMouseMove, ActionType::MouseMove); ImGui::SameLine();
+                renderTypeTab(lblBot,       ActionType::Bot);       ImGui::SameLine();
                 {
                     auto axisEdit = m_model.axisActionEdits.find(axisKey);
                     bool hasRanges = (axisEdit != m_model.axisActionEdits.end() &&
@@ -1239,9 +1299,9 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                                 re.action = tr.action; re.hasAction = tr.hasAction;
                                 cur.push_back(re);
                             }
-                        m_trigRangeModal.open(axisKey, cur);
+                        m_trigRangeModal.open(axisKey, cur, m_engine->getLoadedBotNames());
                         m_sel.actionType = ActionType::Xbox;
-                        m_sel.captureKeys.clear(); m_sel.macroSel.clear();
+                        m_sel.captureKeys.clear(); m_sel.macroSel.clear(); m_sel.botSel.clear();
                     }
                     if (hasRanges) ImGui::PopStyleColor();
                 }
@@ -1270,7 +1330,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                         ha.type = HalfAxisActionType::Macro; ha.target = m_sel.macroSel;
                         m_model.axisActionEdits[axisKey] = ha;
                         m_sel.physComp = -1; m_sel.stickDir.clear();
-                        m_sel.actionType = ActionType::Xbox; m_sel.macroSel.clear();
+                        m_sel.actionType = ActionType::Xbox; m_sel.macroSel.clear(); m_sel.botSel.clear();
                     }
                     if (editInlineMacro && !axisKey.empty()) {
                         m_macroModalPending.ctx = MacroModalPending::Ctx::Axis;
@@ -1335,6 +1395,20 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                         m_sel.physComp = -1; m_sel.stickDir.clear();
                         m_sel.actionType = ActionType::Xbox;
                     }
+                } else if (m_sel.actionType == ActionType::Bot) {
+                    std::vector<std::string> availableBots = m_engine->getLoadedBotNames();
+                    if (m_sel.botSel.empty()) {
+                        auto it = m_model.axisActionEdits.find(axisKey);
+                        if (it != m_model.axisActionEdits.end() && it->second.type == HalfAxisActionType::Bot)
+                            m_sel.botSel = it->second.target;
+                    }
+                    if (ActionPanel::renderBotCombo("botAxis", m_sel.botSel, availableBots, availW)) {
+                        HalfAxisAction ha;
+                        ha.type = HalfAxisActionType::Bot; ha.target = m_sel.botSel;
+                        m_model.axisActionEdits[axisKey] = ha;
+                        m_sel.physComp = -1; m_sel.stickDir.clear();
+                        m_sel.actionType = ActionType::Xbox; m_sel.botSel.clear();
+                    }
                 }
                 // Mando mode: user clicks virtual pad → onVirtHitAxisAction
 
@@ -1379,7 +1453,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
         }
 
         float btnW   = 90.0f;
-        float totalW = btnW * 5 + ImGui::GetStyle().ItemSpacing.x * 4;
+        float totalW = btnW * 6 + ImGui::GetStyle().ItemSpacing.x * 5;
         float offX   = (availW - totalW) * 0.5f;
         if (offX > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offX);
         auto renderTypeTab = [&](const char* label, ActionType type) {
@@ -1390,22 +1464,24 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
             }
             if (sel) ImGui::PopStyleColor();
         };
-        char lblMacro[64], lblKeyboard[64], lblMouse[64];
+        char lblMacro[64], lblKeyboard[64], lblMouse[64], lblBot[64];
         snprintf(lblMacro,    sizeof(lblMacro),    "%s##trigMacro",  tr("action.type_macro"));
         snprintf(lblKeyboard, sizeof(lblKeyboard), "%s##trigKb",     tr("action.type_keyboard"));
         snprintf(lblMouse,    sizeof(lblMouse),    "%s##trigMouse",  tr("action.type_mouse"));
+        snprintf(lblBot,      sizeof(lblBot),      "%s##trigBot",    tr("action.type_bot"));
         renderTypeTab("Xbox/Anal.##trigXbox", ActionType::Xbox);     ImGui::SameLine();
         renderTypeTab(lblMacro,               ActionType::Macro);    ImGui::SameLine();
         renderTypeTab(lblKeyboard,            ActionType::Keyboard); ImGui::SameLine();
         renderTypeTab(lblMouse,               ActionType::Mouse);    ImGui::SameLine();
+        renderTypeTab(lblBot,                 ActionType::Bot);      ImGui::SameLine();
         {
             const std::vector<RangeEdit>& curRanges = (m_sel.triggerSrc == "l2") ? m_model.trigLRangeEdits : m_model.trigRRangeEdits;
             bool hasRanges = !curRanges.empty();
             if (hasRanges) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
             if (ImGui::Button(trid("btn.ranges", "trigRanges").c_str(), { btnW, 0.0f })) {
-                m_trigRangeModal.open(m_sel.triggerSrc, curRanges);
+                m_trigRangeModal.open(m_sel.triggerSrc, curRanges, m_engine->getLoadedBotNames());
                 m_sel.actionType = ActionType::Xbox;
-                m_sel.captureKeys.clear(); m_sel.macroSel.clear();
+                m_sel.captureKeys.clear(); m_sel.macroSel.clear(); m_sel.botSel.clear();
             }
             if (hasRanges) ImGui::PopStyleColor();
         }
@@ -1433,7 +1509,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                 ButtonAction act;
                 act.type = ButtonActionType::Macro; act.physical = m_sel.triggerSrc; act.name = m_sel.macroSel;
                 m_model.trigActionEdits[m_sel.triggerSrc] = act;
-                m_sel.triggerSrc.clear(); m_sel.actionType = ActionType::Xbox; m_sel.macroSel.clear();
+                m_sel.triggerSrc.clear(); m_sel.actionType = ActionType::Xbox; m_sel.macroSel.clear(); m_sel.botSel.clear();
             }
             if (editInlineMacro && !m_sel.triggerSrc.empty()) {
                 m_macroModalPending.ctx = MacroModalPending::Ctx::Trigger;
@@ -1465,6 +1541,20 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
                 m_model.trigActionEdits[m_sel.triggerSrc] = act;
                 m_sel.triggerSrc.clear(); m_sel.actionType = ActionType::Xbox;
             }
+
+        } else if (m_sel.actionType == ActionType::Bot) {
+            std::vector<std::string> availableBots = m_engine->getLoadedBotNames();
+            if (m_sel.botSel.empty() && !m_sel.triggerSrc.empty()) {
+                auto it = m_model.trigActionEdits.find(m_sel.triggerSrc);
+                if (it != m_model.trigActionEdits.end() && it->second.type == ButtonActionType::Bot)
+                    m_sel.botSel = it->second.name;
+            }
+            if (ActionPanel::renderBotCombo("botTrigger", m_sel.botSel, availableBots, availW)) {
+                ButtonAction act;
+                act.type = ButtonActionType::Bot; act.physical = m_sel.triggerSrc; act.name = m_sel.botSel;
+                m_model.trigActionEdits[m_sel.triggerSrc] = act;
+                m_sel.triggerSrc.clear(); m_sel.actionType = ActionType::Xbox; m_sel.botSel.clear();
+            }
         }
     } // trigger action panel
 
@@ -1494,7 +1584,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
             m_sel.physComp = -1; m_sel.stickDir.clear();
         }
         m_sel.actionType = ActionType::Xbox;
-        m_sel.captureKeys.clear(); m_sel.macroSel.clear();
+        m_sel.captureKeys.clear(); m_sel.macroSel.clear(); m_sel.botSel.clear();
     }
 
     // ── Modal macro inline ────────────────────────────────────────────────────
@@ -1521,7 +1611,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
         }
         m_macroModalPending.ctx = MacroModalPending::Ctx::None;
         m_sel.physComp = -1; m_sel.stickAsButton = false; m_sel.dpadDir.clear();
-        m_sel.actionType = ActionType::Xbox; m_sel.macroSel.clear();
+        m_sel.actionType = ActionType::Xbox; m_sel.macroSel.clear(); m_sel.botSel.clear();
         m_sel.stickDir.clear(); m_sel.triggerSrc.clear();
     }
 
@@ -1546,7 +1636,7 @@ void MappingEditor::render(PadView& phys, PadView& virt) {
             m_sel.physComp = -1; m_sel.stickDir.clear(); m_sel.stickAsButton = false;
             m_sel.dpadDir.clear(); m_sel.triggerSrc.clear();
             m_sel.actionType = ActionType::Xbox;
-            m_sel.captureKeys.clear(); m_sel.macroSel.clear();
+            m_sel.captureKeys.clear(); m_sel.macroSel.clear(); m_sel.botSel.clear();
             reload();
             m_active = false;
         }
@@ -1611,7 +1701,7 @@ void MappingEditor::onArrowHit(int arrowComp, const std::string& dir) {
         m_sel.physComp = arrowComp; m_sel.stickDir = dir; m_sel.stickAsButton = false;
         m_sel.actionType = ActionType::Xbox;
         m_sel.triggerSrc.clear(); m_sel.dpadDir.clear();
-        m_sel.captureKeys.clear(); m_sel.macroSel.clear();
+        m_sel.captureKeys.clear(); m_sel.macroSel.clear(); m_sel.botSel.clear();
     }
 }
 
@@ -1622,19 +1712,19 @@ void MappingEditor::onPhysButtonHit(PadView& phys, int physHit) {
         std::string trigSrc = (hitState == "triggerL") ? "l2" : "r2";
         if (m_sel.triggerSrc == trigSrc) {
             m_sel.triggerSrc.clear(); m_sel.actionType = ActionType::Xbox;
-            m_sel.captureKeys.clear(); m_sel.macroSel.clear();
+            m_sel.captureKeys.clear(); m_sel.macroSel.clear(); m_sel.botSel.clear();
         } else {
             m_sel.triggerSrc = trigSrc; m_sel.physComp = -1;
             m_sel.actionType = ActionType::Xbox;
-            m_sel.captureKeys.clear(); m_sel.macroSel.clear();
+            m_sel.captureKeys.clear(); m_sel.macroSel.clear(); m_sel.botSel.clear();
         }
     } else if (physHit == m_sel.physComp) {
         m_sel.physComp = -1; m_sel.actionType = ActionType::Xbox;
-        m_sel.captureKeys.clear(); m_sel.macroSel.clear();
+        m_sel.captureKeys.clear(); m_sel.macroSel.clear(); m_sel.botSel.clear();
     } else {
         m_sel.physComp = physHit; m_sel.triggerSrc.clear();
         m_sel.actionType = ActionType::Xbox;
-        m_sel.captureKeys.clear(); m_sel.macroSel.clear();
+        m_sel.captureKeys.clear(); m_sel.macroSel.clear(); m_sel.botSel.clear();
     }
 }
 
@@ -1645,7 +1735,7 @@ void MappingEditor::onPhysStickHit(int physHit) {
     } else {
         m_sel.physComp = physHit; m_sel.stickAsButton = true; m_sel.stickDir.clear();
         m_sel.actionType = ActionType::Xbox;
-        m_sel.captureKeys.clear(); m_sel.macroSel.clear();
+        m_sel.captureKeys.clear(); m_sel.macroSel.clear(); m_sel.botSel.clear();
     }
 }
 
@@ -1658,7 +1748,7 @@ void MappingEditor::onPhysDpadHit(PadView& phys, int physHit, ImVec2 mouse) {
     } else {
         m_sel.physComp = physHit; m_sel.triggerSrc.clear(); m_sel.dpadDir = dir;
         m_sel.actionType = ActionType::Xbox;
-        m_sel.captureKeys.clear(); m_sel.macroSel.clear();
+        m_sel.captureKeys.clear(); m_sel.macroSel.clear(); m_sel.botSel.clear();
     }
 }
 
