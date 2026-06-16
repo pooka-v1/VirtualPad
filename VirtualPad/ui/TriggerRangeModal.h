@@ -16,7 +16,9 @@
 class TriggerRangeModal {
 public:
     // Initialise and open the modal.
-    void open(const std::string& trigger, const std::vector<RangeEdit>& current);
+    // botNames: bots currently loaded by the engine, for the Bot action picker.
+    void open(const std::string& trigger, const std::vector<RangeEdit>& current,
+              const std::vector<std::string>& botNames = {});
 
     // Render the popup. Returns true once when the user accepts.
     // Caller must then read result() and forKey() and apply them.
@@ -34,9 +36,13 @@ private:
     ActionType m_actType   = ActionType::Xbox;
     std::vector<std::pair<std::string, std::string>> m_captureKeys;
     std::string  m_macroSel;
+    std::string  m_botSel;
     int          m_xboxSel   = -1;
 
     // Macro name cache — lazy-loaded on first use, persists across openings.
     std::vector<std::string> m_macroNames;
     bool                     m_macroNamesLoaded = false;
+
+    // Bots loaded by the engine — provided by the caller on open().
+    std::vector<std::string> m_botNames;
 };

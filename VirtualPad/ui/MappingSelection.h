@@ -10,7 +10,7 @@
 // Defined here (not inside MappingSelection) so TriggerRangeModal can use it
 // without a circular dependency.
 // ---------------------------------------------------------------------------
-enum class ActionType { Xbox, Analog, Macro, Keyboard, Mouse, MouseMove };
+enum class ActionType { Xbox, Analog, Macro, Keyboard, Mouse, MouseMove, Bot };
 
 // ---------------------------------------------------------------------------
 // MappingSelection — all transient UI selection and interaction state for the
@@ -50,6 +50,7 @@ struct MappingSelection {
     ActionType actionType     = ActionType::Xbox;
     std::vector<std::pair<std::string, std::string>> captureKeys; // {json_name, display}
     std::string  macroSel;
+    std::string  botSel;
 
     // --- Axis-action MouseMove state ---
     float       axisMouseSpeed  = 15.0f;
@@ -83,6 +84,7 @@ struct MappingSelection {
         actionType    = ActionType::Xbox;
         captureKeys.clear();
         macroSel.clear();
+        botSel.clear();
         h9HoldComp    = -1;
         h9HoldStickDir.clear();
         h9HoldDpadDir.clear();

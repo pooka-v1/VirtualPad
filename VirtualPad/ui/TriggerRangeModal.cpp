@@ -9,13 +9,16 @@ using json = nlohmann::json;
 #include <algorithm>
 
 // ---------------------------------------------------------------------------
-void TriggerRangeModal::open(const std::string& trigger, const std::vector<RangeEdit>& current) {
+void TriggerRangeModal::open(const std::string& trigger, const std::vector<RangeEdit>& current,
+                             const std::vector<std::string>& botNames) {
     m_forKey = trigger;
     m_work       = current;
     m_selSect    = -1;
     m_actType    = ActionType::Xbox;
     m_captureKeys.clear();
     m_macroSel.clear();
+    m_botSel.clear();
+    m_botNames   = botNames;
     m_xboxSel    = -1;
     if (m_work.empty()) {
         RangeEdit re; re.from = 0.1f; re.to = 1.0f;
@@ -98,12 +101,13 @@ bool TriggerRangeModal::render() {
                 if (trigPos >= m_work[i].from && trigPos <= m_work[i].to) {
                     m_selSect = (m_selSect == i) ? -1 : i;
                     m_actType = ActionType::Xbox;
-                    m_captureKeys.clear(); m_macroSel.clear(); m_xboxSel = -1;
+                    m_captureKeys.clear(); m_macroSel.clear(); m_botSel.clear(); m_xboxSel = -1;
                     if (m_selSect >= 0 && m_work[i].hasAction) {
                         const auto& act = m_work[i].action;
                         if (act.type == ButtonActionType::Macro)           m_actType = ActionType::Macro;
                         else if (act.type == ButtonActionType::Keyboard)   m_actType = ActionType::Keyboard;
                         else if (act.type == ButtonActionType::MouseClick) m_actType = ActionType::Mouse;
+                        else if (act.type == ButtonActionType::Bot)        { m_actType = ActionType::Bot; m_botSel = act.name; }
                         else {
                             m_actType = ActionType::Xbox;
                             if (act.type == ButtonActionType::VirtualButton) {
@@ -135,7 +139,7 @@ bool TriggerRangeModal::render() {
                 m_work.push_back(re);
             }
             m_selSect = -1; m_actType = ActionType::Xbox;
-            m_captureKeys.clear(); m_macroSel.clear();
+            m_captureKeys.clear(); m_macroSel.clear(); m_botSel.clear();
         }
         if (!canAdd) ImGui::EndDisabled();
         ImGui::SameLine();
@@ -179,24 +183,26 @@ bool TriggerRangeModal::render() {
 
         float bW = 85.0f;
         float sp = ImGui::GetStyle().ItemSpacing.x;
-        float totalBtnW = bW * 4 + sp * 3;
+        float totalBtnW = bW * 5 + sp * 4;
         float offBX = (ImGui::GetContentRegionAvail().x - totalBtnW) * 0.5f;
         if (offBX > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offBX);
         auto rTypeBtn = [&](const char* lbl, ActionType t) {
             bool sel = (m_actType == t);
             if (sel) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-            if (ImGui::Button(lbl, { bW, 0.0f })) { m_actType = t; m_captureKeys.clear(); m_macroSel.clear(); m_xboxSel = -1; }
+            if (ImGui::Button(lbl, { bW, 0.0f })) { m_actType = t; m_captureKeys.clear(); m_macroSel.clear(); m_botSel.clear(); m_xboxSel = -1; }
             if (sel) ImGui::PopStyleColor();
         };
-        char lbl0[64], lbl1[64], lbl2[64], lbl3[64];
+        char lbl0[64], lbl1[64], lbl2[64], lbl3[64], lbl4[64];
         snprintf(lbl0, sizeof(lbl0), "%s##rt0", tr("action.type_gamepad"));
         snprintf(lbl1, sizeof(lbl1), "%s##rt1", tr("action.type_macro"));
         snprintf(lbl2, sizeof(lbl2), "%s##rt2", tr("action.type_keyboard"));
         snprintf(lbl3, sizeof(lbl3), "%s##rt3", tr("action.type_mouse"));
+        snprintf(lbl4, sizeof(lbl4), "%s##rt4", tr("action.type_bot"));
         rTypeBtn(lbl0, ActionType::Xbox);     ImGui::SameLine();
         rTypeBtn(lbl1, ActionType::Macro);    ImGui::SameLine();
         rTypeBtn(lbl2, ActionType::Keyboard); ImGui::SameLine();
-        rTypeBtn(lbl3, ActionType::Mouse);
+        rTypeBtn(lbl3, ActionType::Mouse);    ImGui::SameLine();
+        rTypeBtn(lbl4, ActionType::Bot);
 
         ImGui::Spacing();
 
@@ -292,6 +298,24 @@ bool TriggerRangeModal::render() {
                 ImGui::SameLine();
                 ImGui::TextColored({ 0.4f, 1.0f, 0.4f, 1.0f }, "\xe2\x86\x92 %s",
                     m_work[m_selSect].action.mouseButton.c_str());
+            }
+
+        } else if (m_actType == ActionType::Bot) {
+            if (m_botSel.empty() && m_work[m_selSect].hasAction &&
+                m_work[m_selSect].action.type == ButtonActionType::Bot)
+                m_botSel = m_work[m_selSect].action.name;
+            if (ActionPanel::renderBotCombo("bot_rng", m_botSel, m_botNames,
+                                            ImGui::GetContentRegionAvail().x)) {
+                ButtonAction act;
+                act.type = ButtonActionType::Bot; act.name = m_botSel;
+                m_work[m_selSect].action    = act;
+                m_work[m_selSect].hasAction = true;
+            }
+            if (m_work[m_selSect].hasAction &&
+                m_work[m_selSect].action.type == ButtonActionType::Bot) {
+                ImGui::SameLine();
+                ImGui::TextColored({ 0.4f, 1.0f, 0.4f, 1.0f }, "\xe2\x86\x92 %s",
+                    m_work[m_selSect].action.name.c_str());
             }
         }
     }

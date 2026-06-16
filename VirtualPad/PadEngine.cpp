@@ -15,7 +15,7 @@
 #include "input/HIDInputSource.h"
 #include "output/ViGEmOutputAdapter.h"
 #include "config/ConfigLoader.h"
-#include "bots/LightningBot.h"
+#include "bots/BotLoader.h"
 #include "macros/Macro.h"
 #include "macros/MacroParser.h"
 
@@ -134,11 +134,28 @@ static void sendMouseButton(const std::string& btn, bool press) {
 
 // ---------------------------------------------------------------------------
 
-static int findBotBit(const ControllerConfig& cfg, const std::string& botName) {
-    for (const auto& [bit, action] : cfg.buttons)
-        if (action.type == ButtonActionType::Bot && action.name == botName)
-            return bit;
-    return 0;
+static void applyBotOutput(const BotOutput& out, GamepadState& state) {
+    if (out.buttons & BOT_BTN_A)          state.btnA     = true;
+    if (out.buttons & BOT_BTN_B)          state.btnB     = true;
+    if (out.buttons & BOT_BTN_X)          state.btnX     = true;
+    if (out.buttons & BOT_BTN_Y)          state.btnY     = true;
+    if (out.buttons & BOT_BTN_LB)         state.btnLB    = true;
+    if (out.buttons & BOT_BTN_RB)         state.btnRB    = true;
+    if (out.buttons & BOT_BTN_BACK)       state.btnBack  = true;
+    if (out.buttons & BOT_BTN_START)      state.btnStart = true;
+    if (out.buttons & BOT_BTN_HOME)       state.btnHome  = true;
+    if (out.buttons & BOT_BTN_L3)         state.btnL3    = true;
+    if (out.buttons & BOT_BTN_R3)         state.btnR3    = true;
+    if (out.buttons & BOT_BTN_DPAD_UP)    state.dpadUp    = true;
+    if (out.buttons & BOT_BTN_DPAD_DOWN)  state.dpadDown  = true;
+    if (out.buttons & BOT_BTN_DPAD_LEFT)  state.dpadLeft  = true;
+    if (out.buttons & BOT_BTN_DPAD_RIGHT) state.dpadRight = true;
+    if (out.lt > 0.0f)  state.triggerL = out.lt;
+    if (out.rt > 0.0f)  state.triggerR = out.rt;
+    if (out.lx != 0.0f) state.leftX    = out.lx;
+    if (out.ly != 0.0f) state.leftY    = out.ly;
+    if (out.rx != 0.0f) state.rightX   = out.rx;
+    if (out.ry != 0.0f) state.rightY   = out.ry;
 }
 
 // ---------------------------------------------------------------------------
@@ -238,6 +255,11 @@ void PadEngine::setProfilePath(const std::string& path) {
 std::string PadEngine::getProfilePath() const {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_profilePath;
+}
+
+std::vector<std::string> PadEngine::getLoadedBotNames() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_loadedBotNames;
 }
 
 std::string PadEngine::getActiveProfileName() const {
@@ -490,12 +512,14 @@ void PadEngine::threadFunc() {
         { std::lock_guard<std::mutex> lock(m_mutex); m_activeLayoutId = cfgBase->layout_id; }
 
         ControllerConfig effectiveCfg = *cfgBase;
+        std::vector<std::string> activeProfileContextBots;
         {
             std::string profilePath = getProfilePath();
             if (!profilePath.empty()) {
                 try {
                     GameProfile profile = loadGameProfile(profilePath);
                     effectiveCfg = applyProfile(*cfgBase, profile);
+                    activeProfileContextBots = profile.context_bots;
                     { std::lock_guard<std::mutex> lock(m_mutex); m_activeProfileName = profile.profile_name; }
                     spdlog::info("Game profile '{}' applied.", profile.profile_name);
                 } catch (const std::exception& ex) {
@@ -519,7 +543,7 @@ void PadEngine::threadFunc() {
                 });
             if (it != physCtrls.end()) {
                 PhysicalController pc = *it;
-                rebuildPhysicalControllerButtons(pc, effectiveCfg);
+                rebuildPhysicalControllerFromConfig(pc, effectiveCfg);
                 input->setPhysicalController(pc);
                 spdlog::info("PhysicalController injected for {:04X}:{:04X}", selected.vid, selected.pid);
             }
@@ -539,7 +563,8 @@ void PadEngine::threadFunc() {
         m_hidHide.hideDevice(selected.vid, selected.pid);
 
         // ── Macros (re-initialised per device / profile) ─────────────────────
-        int lightningBotBit = 0;
+        std::unordered_map<int, std::string> botBits;     // physical bit → bot name
+        std::unordered_map<int, bool>        botBtnPrev;  // physical bit → prev pressed state
         std::unordered_map<int, Macro>       macros;
         std::unordered_map<int, bool>        macroPrevBtn;
         std::unordered_map<int, std::string> macroNames;
@@ -555,6 +580,8 @@ void PadEngine::threadFunc() {
         std::unordered_map<std::string, std::string> axisMacroNames;
         std::unordered_map<std::string, bool>        axisKbPrev;
         std::unordered_map<std::string, bool>        axisMousePrev;
+        std::unordered_map<std::string, std::string> axisBotNames;  // key → bot name
+        std::unordered_map<std::string, bool>        axisBotPrev;   // key → prev active state
         // Axis Ranges: prev active ButtonAction per key (nullopt = nothing was active)
         std::unordered_map<std::string, std::optional<ButtonAction>> axisRangePrev;
         // Axis Range macros: composite key = "axis_key|macro_name"
@@ -567,6 +594,8 @@ void PadEngine::threadFunc() {
         std::unordered_map<std::string, std::string> dpadMacroNames;
         std::unordered_map<std::string, bool>        dpadKbPrev;
         std::unordered_map<std::string, bool>        dpadMousePrev;
+        std::unordered_map<std::string, std::string> dpadBotNames;  // dir → bot name
+        std::unordered_map<std::string, bool>        dpadBotPrev;   // dir → prev active state
 
         // Trigger-as-source state
         float trigLPrev = 0.0f;           // previous frame physical trigger L value
@@ -579,6 +608,8 @@ void PadEngine::threadFunc() {
         bool  trigRKbPrev   = false;
         bool  trigLMousPrev = false;      // previous active state for mouse trigger L
         bool  trigRMousPrev = false;
+        bool  trigLBotPrev  = false;      // previous active state for bot-toggle trigger L
+        bool  trigRBotPrev  = false;
         // Ranged trigger state (indexed by range position in triggerLRanges/triggerRRanges)
         // uint8_t instead of bool to avoid std::vector<bool> proxy reference issues
         std::vector<uint8_t> trigLRangePrev;
@@ -594,8 +625,10 @@ void PadEngine::threadFunc() {
             kbPrevBtn.clear();   mousePrevBtn.clear();
             axisMacros.clear();  axisMacroPrev.clear(); axisMacroNames.clear();
             axisKbPrev.clear();  axisMousePrev.clear();
+            axisBotNames.clear(); axisBotPrev.clear();
             dpadMacros.clear();  dpadMacroPrev.clear(); dpadMacroNames.clear();
             dpadKbPrev.clear();  dpadMousePrev.clear();
+            dpadBotNames.clear(); dpadBotPrev.clear();
             for (const auto& [bit, action] : cfg->buttons) {
                 if (action.type == ButtonActionType::Keyboard)   kbPrevBtn[bit]    = false;
                 if (action.type == ButtonActionType::MouseClick) mousePrevBtn[bit] = false;
@@ -610,6 +643,11 @@ void PadEngine::threadFunc() {
             for (const auto& [key, action] : cfg->axis_actions) {
                 if (action.type == HalfAxisActionType::Keyboard)   axisKbPrev[key]    = false;
                 if (action.type == HalfAxisActionType::MouseClick) axisMousePrev[key] = false;
+                if (action.type == HalfAxisActionType::Bot) {
+                    axisBotNames[key] = action.target;
+                    axisBotPrev[key]  = false;
+                    spdlog::info("Bot '{}' assigned to axis direction {}.", action.target, key);
+                }
                 if (action.type == HalfAxisActionType::Ranges) {
                     axisRangePrev[key] = std::nullopt;
                     for (const auto& r : action.ranges) {
@@ -633,9 +671,20 @@ void PadEngine::threadFunc() {
                     }
                 }
             }
-            lightningBotBit = findBotBit(*cfg, "LightningBot");
-            if (lightningBotBit > 0)
-                spdlog::info("LightningBot assigned to button {}.", lightningBotBit);
+            botBits.clear();
+            botBtnPrev.clear();
+            for (const auto& [bit, action] : cfg->buttons) {
+                if (action.type != ButtonActionType::Bot) continue;
+                botBits[bit]    = action.name;
+                botBtnPrev[bit] = false;
+                spdlog::info("Bot '{}' assigned to button {}.", action.name, bit);
+            }
+            for (const auto& [dir, action] : cfg->dpadActions) {
+                if (action.type != ButtonActionType::Bot) continue;
+                dpadBotNames[dir] = action.name;
+                dpadBotPrev[dir]  = false;
+                spdlog::info("Bot '{}' assigned to dpad {}.", action.name, dir);
+            }
             for (const auto& [bit, action] : cfg->buttons) {
                 if (action.type != ButtonActionType::Macro) continue;
                 std::string execution = action.execution;
@@ -712,6 +761,7 @@ void PadEngine::threadFunc() {
             // Trigger-as-source state reset
             trigLPrev = trigRPrev = 0.0f;
             trigLKbPrev = trigRKbPrev = trigLMousPrev = trigRMousPrev = false;
+            trigLBotPrev = trigRBotPrev = false;
             trigLMacroOk = trigRMacroOk = false;
             // Simple trigger macros
             auto initTrigMacro = [&](const ButtonAction& act, Macro& mac, bool& ok) {
@@ -764,7 +814,30 @@ void PadEngine::threadFunc() {
         };
         initMacros();
 
-        LightningBot bot;
+        BotLoader botLoader;
+        botLoader.scan("data/bots");
+        {
+            std::vector<std::string> names;
+            for (const auto& b : botLoader.bots()) names.push_back(b->name);
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_loadedBotNames = std::move(names);
+        }
+        for (const auto& bname : cfgBase->context_bots) {
+            if (auto* b = botLoader.find(bname)) {
+                b->start();
+                spdlog::info("[BOT] Context bot '{}' started (device).", bname);
+                pushEvent({ PadEventType::BotToggle, bname, true });
+            } else {
+                spdlog::warn("[BOT] Context bot '{}' not loaded.", bname);
+            }
+        }
+        for (const auto& bname : activeProfileContextBots) {
+            if (auto* b = botLoader.find(bname)) {
+                b->start();
+                spdlog::info("[BOT] Context bot '{}' started (profile init).", bname);
+                pushEvent({ PadEventType::BotToggle, bname, true });
+            }
+        }
         std::string currentProfilePath = getProfilePath();
 
         // ── Main run loop ─────────────────────────────────────────────────────
@@ -774,7 +847,6 @@ void PadEngine::threadFunc() {
         spdlog::info("Forwarding input. Close the window to exit.");
 
     GamepadState state;
-    bool         botBtnPrev    = false;
     bool         mouseWasMoving    = false;
     float        mouseAccumX       = 0.0f;
     float        mouseAccumY       = 0.0f;
@@ -787,10 +859,12 @@ void PadEngine::threadFunc() {
         if (newProfile != currentProfilePath || m_profileDirty.exchange(false)) {
             currentProfilePath = newProfile;
             effectiveCfg = *cfgBase;
+            activeProfileContextBots.clear();
             if (!currentProfilePath.empty()) {
                 try {
                     GameProfile profile = loadGameProfile(currentProfilePath);
                     effectiveCfg = applyProfile(*cfgBase, profile);
+                    activeProfileContextBots = profile.context_bots;
                     { std::lock_guard<std::mutex> lock(m_mutex); m_activeProfileName = profile.profile_name; }
                     spdlog::info("Game profile '{}' applied (hot-swap).", profile.profile_name);
                 } catch (const std::exception& ex) {
@@ -809,12 +883,23 @@ void PadEngine::threadFunc() {
                     });
                 if (it != physCtrls.end()) {
                     PhysicalController pc = *it;
-                    rebuildPhysicalControllerButtons(pc, effectiveCfg);
+                    rebuildPhysicalControllerFromConfig(pc, effectiveCfg);
                     input->setPhysicalController(pc);
                 }
             }
-            if (bot.isActive()) bot.toggle();
-            botBtnPrev  = false;
+            botLoader.stopAll();
+            for (const auto& bname : cfgBase->context_bots) {
+                if (auto* b = botLoader.find(bname)) {
+                    b->start();
+                    pushEvent({ PadEventType::BotToggle, bname, true });
+                }
+            }
+            for (const auto& bname : activeProfileContextBots) {
+                if (auto* b = botLoader.find(bname)) {
+                    b->start();
+                    pushEvent({ PadEventType::BotToggle, bname, true });
+                }
+            }
             mouseAccumX = 0.0f;
             mouseAccumY = 0.0f;
             initMacros();
@@ -854,8 +939,11 @@ void PadEngine::threadFunc() {
                         [&](const PhysicalController& pc) {
                             return pc.vid == selected.vid && pc.pid == selected.pid;
                         });
-                    if (it != physCtrls.end())
-                        input->setPhysicalController(*it);
+                    if (it != physCtrls.end()) {
+                        PhysicalController pc = *it;
+                        rebuildPhysicalControllerFromConfig(pc, effectiveCfg);
+                        input->setPhysicalController(pc);
+                    }
                 } catch (const std::exception& ex) {
                     spdlog::warn("PhysicalController hot-reload failed: {}", ex.what());
                 }
@@ -893,14 +981,19 @@ void PadEngine::threadFunc() {
             const bool editorOpen = m_editorOpen.load();
             // Bot and macro toggle detection uses the button mask from the read just performed
 
-            if (lightningBotBit > 0) {
-                bool pressed = (btns & (1u << (lightningBotBit - 1))) != 0;
-                if (pressed && !botBtnPrev) {
-                    bot.toggle();
-                    spdlog::info("[BOT] Lightning bot {}", bot.isActive() ? "ON" : "OFF");
-                    pushEvent({ PadEventType::BotToggle, "LightningBot", bot.isActive() });
+            for (auto& [bit, botName] : botBits) {
+                bool  pressed = (btns & (1u << (bit - 1))) != 0;
+                bool& prev    = botBtnPrev[bit];
+                if (pressed && !prev) {
+                    if (auto* b = botLoader.find(botName)) {
+                        b->toggle();
+                        spdlog::info("[BOT] '{}' {}", botName, b->isActive() ? "ON" : "OFF");
+                        pushEvent({ PadEventType::BotToggle, botName, b->isActive() });
+                    } else {
+                        spdlog::warn("[BOT] '{}' not loaded.", botName);
+                    }
                 }
-                botBtnPrev = pressed;
+                prev = pressed;
             }
 
             for (auto& [bit, macro] : macros) {
@@ -929,8 +1022,13 @@ void PadEngine::threadFunc() {
                 prev = pressed;
             }
 
-            bool botPressed = bot.consumePressA();
-            if (botPressed) state.btnA = true;
+            for (auto& botInst : botLoader.bots()) {
+                if (!botInst->isActive()) continue;
+                BotOutput out{};
+                out.version = BOT_API_VERSION;
+                if (botInst->tick(&out))
+                    applyBotOutput(out, state);
+            }
 
             for (auto& [bit, macro] : macros) {
                 bool wasActive = macro.isActive();
@@ -1030,6 +1128,21 @@ void PadEngine::threadFunc() {
                     prev = active;
                 }
 
+                for (auto& [key, prev] : axisBotPrev) {
+                    bool active = activeAASet.count(key) > 0;
+                    if (active && !prev) {
+                        const std::string& botName = axisBotNames[key];
+                        if (auto* b = botLoader.find(botName)) {
+                            b->toggle();
+                            spdlog::info("[BOT] '{}' {}", botName, b->isActive() ? "ON" : "OFF");
+                            pushEvent({ PadEventType::BotToggle, botName, b->isActive() });
+                        } else {
+                            spdlog::warn("[BOT] '{}' not loaded.", botName);
+                        }
+                    }
+                    prev = active;
+                }
+
                 // Axis Ranges: Keyboard / MouseClick / Macro edge-triggered per range action
                 {
                     const auto& rangeActions = input->getActiveAxisRangeActions();
@@ -1079,6 +1192,14 @@ void PadEngine::threadFunc() {
                                     else
                                         mit->second.toggle();
                                     pushEvent({ PadEventType::MacroToggle, cur.name, mit->second.isActive() });
+                                }
+                            } else if (cur.type == ButtonActionType::Bot) {
+                                if (auto* b = botLoader.find(cur.name)) {
+                                    b->toggle();
+                                    spdlog::info("[BOT] '{}' {}", cur.name, b->isActive() ? "ON" : "OFF");
+                                    pushEvent({ PadEventType::BotToggle, cur.name, b->isActive() });
+                                } else {
+                                    spdlog::warn("[BOT] '{}' not loaded.", cur.name);
                                 }
                             }
                             prev = cur;
@@ -1159,6 +1280,26 @@ void PadEngine::threadFunc() {
                     if (dir == "right") state.dpadRight = false;
                 }
             }
+            for (auto& [dir, prev] : dpadBotPrev) {
+                bool active = dpadActive(dir);
+                if (active && !prev) {
+                    const std::string& botName = dpadBotNames[dir];
+                    if (auto* b = botLoader.find(botName)) {
+                        b->toggle();
+                        spdlog::info("[BOT] '{}' {}", botName, b->isActive() ? "ON" : "OFF");
+                        pushEvent({ PadEventType::BotToggle, botName, b->isActive() });
+                    } else {
+                        spdlog::warn("[BOT] '{}' not loaded.", botName);
+                    }
+                }
+                prev = active;
+                if (active) {
+                    if (dir == "up")    state.dpadUp    = false;
+                    if (dir == "down")  state.dpadDown  = false;
+                    if (dir == "left")  state.dpadLeft  = false;
+                    if (dir == "right") state.dpadRight = false;
+                }
+            }
             // Dpad direction → virtual trigger (L2/R2)
             for (const auto& [dir, action] : cfg->dpadActions) {
                 if (action.type != ButtonActionType::Trigger) continue;
@@ -1181,7 +1322,7 @@ void PadEngine::threadFunc() {
             // After the call, the source trigger value in state has been routed/cleared.
             auto applyTrigAct = [&](float physVal, const ButtonAction& act,
                                      bool& kbPrev, bool& mousPrev, Macro& mac, bool macOk,
-                                     float& srcTrig) {
+                                     bool& botPrev, float& srcTrig) {
                 bool active = (physVal > kTrigActThresh);
                 switch (act.type) {
                 case ButtonActionType::TriggerPassthrough: {
@@ -1237,6 +1378,19 @@ void PadEngine::threadFunc() {
                     if (macOk && mac.isActive()) mac.tick(state);
                     srcTrig = 0.0f;
                     break;
+                case ButtonActionType::Bot:
+                    if (active && !botPrev) {
+                        if (auto* b = botLoader.find(act.name)) {
+                            b->toggle();
+                            spdlog::info("[BOT] '{}' {}", act.name, b->isActive() ? "ON" : "OFF");
+                            pushEvent({ PadEventType::BotToggle, act.name, b->isActive() });
+                        } else {
+                            spdlog::warn("[BOT] '{}' not loaded.", act.name);
+                        }
+                    }
+                    botPrev = active;
+                    srcTrig = 0.0f;
+                    break;
                 default: break;
                 }
             };
@@ -1249,15 +1403,16 @@ void PadEngine::threadFunc() {
 
             if (cfg->triggerLHasAction && cfg->triggerLRanges.empty()) {
                 const auto& lAct = cfg->triggerLAction;
-                // Marker targets (Macro/KB/Mouse) are not written by the Component System,
+                // Marker targets (Macro/KB/Mouse/Bot) are not written by the Component System,
                 // so read the physical value directly — same pattern as dpadActive().
                 bool lNeedsPhys = lAct.type == ButtonActionType::Macro    ||
                                   lAct.type == ButtonActionType::Keyboard  ||
-                                  lAct.type == ButtonActionType::MouseClick;
+                                  lAct.type == ButtonActionType::MouseClick ||
+                                  lAct.type == ButtonActionType::Bot;
                 float physL = lNeedsPhys ? input->getPhysicalState().triggerL : state.triggerL;
                 applyTrigAct(physL, lAct,
                              trigLKbPrev, trigLMousPrev, trigLMacro, trigLMacroOk,
-                             state.triggerL);
+                             trigLBotPrev, state.triggerL);
                 if (lAct.type == ButtonActionType::TriggerPassthrough &&
                     lAct.target == "r2" && physL > 0.0f)
                     trigRWasCrossTarget = true;
@@ -1266,11 +1421,12 @@ void PadEngine::threadFunc() {
                 const auto& rAct = cfg->triggerRAction;
                 bool rNeedsPhys = rAct.type == ButtonActionType::Macro    ||
                                   rAct.type == ButtonActionType::Keyboard  ||
-                                  rAct.type == ButtonActionType::MouseClick;
+                                  rAct.type == ButtonActionType::MouseClick ||
+                                  rAct.type == ButtonActionType::Bot;
                 float physR = rNeedsPhys ? input->getPhysicalState().triggerR : state.triggerR;
                 applyTrigAct(physR, rAct,
                              trigRKbPrev, trigRMousPrev, trigRMacro, trigRMacroOk,
-                             state.triggerR);
+                             trigRBotPrev, state.triggerR);
                 if (rAct.type == ButtonActionType::TriggerPassthrough &&
                     rAct.target == "l2" && physR > 0.0f)
                     trigLWasCrossTarget = true;
@@ -1322,6 +1478,17 @@ void PadEngine::threadFunc() {
                         }
                         if (i < rangeMacs.size() && rangeMacOk[i] && rangeMacs[i].isActive())
                             rangeMacs[i].tick(state);
+                        break;
+                    case ButtonActionType::Bot:
+                        if (active && !prev) {
+                            if (auto* b = botLoader.find(act.name)) {
+                                b->toggle();
+                                spdlog::info("[BOT] '{}' {}", act.name, b->isActive() ? "ON" : "OFF");
+                                pushEvent({ PadEventType::BotToggle, act.name, b->isActive() });
+                            } else {
+                                spdlog::warn("[BOT] '{}' not loaded.", act.name);
+                            }
+                        }
                         break;
                     default: break;
                     }

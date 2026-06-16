@@ -74,6 +74,9 @@ public:
     DWORD                 getLastRawHat()        const; // raw hat value 0-7 / 0xFFFFFFFF=center
     std::vector<PadEvent> pollEvents();                 // drain the event queue (UI calls each frame)
 
+    // Names of bot DLLs currently loaded from data/bots/ (for UI bot pickers).
+    std::vector<std::string> getLoadedBotNames() const;
+
     // Game profile — set from UI thread; applied at next Configuring phase
     void        setProfilePath(const std::string& path);
     std::string getProfilePath()       const;
@@ -128,6 +131,7 @@ private:
     std::atomic<DWORD>            m_lastRawButtonMask { 0 };        // raw HID button bitmask; atomic
     std::atomic<DWORD>            m_lastRawHat        { 0xFFFFFFFF }; // raw hat value; atomic
     std::deque<PadEvent>          m_eventQueue;        // max 16 entries; protected by m_mutex
+    std::vector<std::string>      m_loadedBotNames;    // names from BotLoader::scan(); protected by m_mutex
     std::string                   m_profilePath;      // protected by m_mutex
     std::string                   m_activeProfileName; // protected by m_mutex
     std::string                   m_activeLayoutId;    // protected by m_mutex

@@ -178,11 +178,13 @@
     "action": {
         "press_keys":    "(press keys...)",
         "pick_macro":    "-- pick macro --",
+        "pick_bot":      "-- pick bot --",
         "pick_button":   "-- pick button --",
         "no_id":         "(no ID)",
         "ranges_header": "Travel zones",
         "type_gamepad":  "Gamepad",
         "type_macro":    "Macro",
+        "type_bot":      "Bot",
         "type_keyboard": "Keyboard",
         "type_mouse":    "Mouse",
         "mouse_left":    "Left",
@@ -280,6 +282,9 @@
         "name_label":     "Name",
         "btn_create":     "Create",
         "toast_saved":    "Saved",
-        "confirm_delete": "Delete this profile? This cannot be undone."
+        "confirm_delete": "Delete this profile? This cannot be undone.",
+        "bot_label":      "Profile bot:",
+        "bots_none":      "— None —",
+        "bots_hint":      "Bot that starts automatically while this profile is active."
     }
 }

@@ -547,6 +547,7 @@ void HIDInputSource::applyAxes(PCHAR buf, ULONG bufLen, GamepadState& state) {
                     case ButtonActionType::Keyboard:
                     case ButtonActionType::MouseClick:
                     case ButtonActionType::Macro:
+                    case ButtonActionType::Bot:
                         m_activeAxisRangeActions[key] = r.action;
                         break;
                     default: break;
@@ -557,6 +558,7 @@ void HIDInputSource::applyAxes(PCHAR buf, ULONG bufLen, GamepadState& state) {
             case HalfAxisActionType::Macro:
             case HalfAxisActionType::Keyboard:
             case HalfAxisActionType::MouseClick:
+            case HalfAxisActionType::Bot:
                 if (absV > ha.threshold)
                     m_activeAxisActions.push_back(key);
                 break;
@@ -756,6 +758,7 @@ void HIDInputSource::applyAxesResidual(PCHAR buf, ULONG bufLen, GamepadState& st
                 case HalfAxisActionType::Macro:
                 case HalfAxisActionType::Keyboard:
                 case HalfAxisActionType::MouseClick:
+                case HalfAxisActionType::Bot:
                     if (absV > ha.threshold)
                         m_activeAxisActions.push_back(key);
                     break;
@@ -764,7 +767,8 @@ void HIDInputSource::applyAxesResidual(PCHAR buf, ULONG bufLen, GamepadState& st
                         if (absV < r.from || absV > r.to || !r.hasAction) continue;
                         if (r.action.type == ButtonActionType::Keyboard   ||
                             r.action.type == ButtonActionType::MouseClick  ||
-                            r.action.type == ButtonActionType::Macro)
+                            r.action.type == ButtonActionType::Macro       ||
+                            r.action.type == ButtonActionType::Bot)
                             m_activeAxisRangeActions[key] = r.action;
                         break;
                     }
