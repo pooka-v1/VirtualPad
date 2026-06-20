@@ -657,3 +657,14 @@ Same button layout as D-mode above.
 Both D-mode and X-mode USB share the same VID/PID (`9018`). The button layout differs between modes, so **only one USB profile can be active at a time**.
 
 > **Recommendation:** configure the USB profile while the controller is connected in **Android mode (D-mode)**. Hold the button combination for D-mode before plugging in the USB cable, then run the Controller Binding Wizard. The resulting config will work correctly for D-mode USB. X-mode USB uses the same VID/PID but different button numbering — configuring it would overwrite the D-mode profile.
+
+---
+
+## License
+
+PadsWay is released under the [MIT License](LICENSE) — © 2026 pooka-v1.
+
+It builds on the MIT-licensed work of [Nefarius](https://github.com/nefarius)
+([ViGEmBus](https://github.com/nefarius/ViGEmBus), [HidHide](https://github.com/nefarius/HidHide))
+and bundles the MIT-licensed libraries [Dear ImGui](https://github.com/ocornut/imgui),
+[nlohmann/json](https://github.com/nlohmann/json) and [spdlog](https://github.com/gabime/spdlog).

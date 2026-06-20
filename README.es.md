@@ -657,3 +657,14 @@ Mismo layout de botones que D-mode.
 D-mode y X-mode por USB comparten el mismo VID/PID (`9018`). El layout de botones difiere entre modos, por lo que **solo puede haber un perfil USB activo a la vez**.
 
 > **Recomendación:** configura el perfil USB con el mando conectado en **modo Android (D-mode)**. Mantén pulsada la combinación de D-mode antes de enchufar el cable USB, y ejecuta el Asistente de emparejamiento. La configuración resultante funcionará correctamente para D-mode USB. El X-mode USB usa el mismo VID/PID pero numeración de botones diferente — configurarlo sobreescribiría el perfil D-mode.
+
+---
+
+## Licencia
+
+PadsWay se distribuye bajo la [Licencia MIT](LICENSE) — © 2026 pooka-v1.
+
+Se apoya en el trabajo (también MIT) de [Nefarius](https://github.com/nefarius)
+([ViGEmBus](https://github.com/nefarius/ViGEmBus), [HidHide](https://github.com/nefarius/HidHide))
+e incluye las librerías MIT [Dear ImGui](https://github.com/ocornut/imgui),
+[nlohmann/json](https://github.com/nlohmann/json) y [spdlog](https://github.com/gabime/spdlog).
