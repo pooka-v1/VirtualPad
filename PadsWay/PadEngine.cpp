@@ -13,6 +13,7 @@
 
 #include "input/HIDScanner.h"
 #include "input/HIDInputSource.h"
+#include "output/IOutputSink.h"
 #include "output/ViGEmOutputAdapter.h"
 #include "config/ConfigLoader.h"
 #include "bots/BotLoader.h"
@@ -397,7 +398,10 @@ void PadEngine::threadFunc() {
     spdlog::debug("[PadEngine] Virtual pad identity: VID:{:04X} PID:{:04X}", vpCfg.vid, vpCfg.pid);
 
     setStatus("Connecting to ViGEm...");
-    auto output = std::make_unique<ViGEmOutputAdapter>(vpCfg.vid, vpCfg.pid);
+    // Output port: the engine only knows IOutputSink; the concrete adapter is
+    // chosen here (composition root). Today always Xbox; the DS4 adapter joins
+    // this selection in the next step.
+    std::unique_ptr<IOutputSink> output = std::make_unique<ViGEmOutputAdapter>(vpCfg.vid, vpCfg.pid);
     if (!output->isReady()) {
         spdlog::error("Aborting: could not create virtual pad.");
         setStatus("ViGEm error — is the driver installed?");

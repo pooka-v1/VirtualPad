@@ -190,6 +190,7 @@
     <ClInclude Include="input\RawHIDReader.h" />
     <ClInclude Include="macros\Macro.h" />
     <ClInclude Include="macros\MacroParser.h" />
+    <ClInclude Include="output\IOutputSink.h" />
     <ClInclude Include="output\ViGEmOutputAdapter.h" />
     <ClInclude Include="Log.h" />
     <ClInclude Include="output\HidHideClient.h" />
