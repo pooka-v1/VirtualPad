@@ -23,7 +23,12 @@ private:
     bool m_macrosSaved = false;
 
     std::vector<std::pair<std::string, std::string>> m_macros;  // sorted by name
-    int  m_selectedIdx = -1;
+    int  m_selectedIdx = -1;   // row highlighted in the list
+
+    // Commit target captured when the modal opens: index of the macro to
+    // overwrite, or -1 to insert a new one. Kept separate from m_selectedIdx so
+    // "New"/"Copy" never overwrite whatever row happens to be highlighted.
+    int  m_editIdx = -1;
 
     // Commit error (name conflict) shown near the action buttons
     std::string m_commitError;

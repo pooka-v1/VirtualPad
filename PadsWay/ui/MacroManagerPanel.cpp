@@ -62,7 +62,7 @@ void MacroManagerPanel::commitFromModal() {
         c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
 
     for (int i = 0; i < (int)m_macros.size(); i++) {
-        if (i == m_selectedIdx) continue;
+        if (i == m_editIdx) continue;   // editing a macro may keep its own name
         if (m_macros[i].first == newName) {
             m_commitError = tr("macros.err_name_taken");
             return;
@@ -70,8 +70,8 @@ void MacroManagerPanel::commitFromModal() {
     }
     m_commitError.clear();
 
-    if (m_selectedIdx >= 0)
-        m_macros[m_selectedIdx] = { newName, newDsl };
+    if (m_editIdx >= 0)
+        m_macros[m_editIdx] = { newName, newDsl };
     else
         m_macros.emplace_back(newName, newDsl);
 
@@ -82,6 +82,7 @@ void MacroManagerPanel::commitFromModal() {
     for (int i = 0; i < (int)m_macros.size(); i++) {
         if (m_macros[i].first == newName) { m_selectedIdx = i; break; }
     }
+    m_editIdx = -1;
 
     save();
     m_macrosSaved = true;
@@ -155,6 +156,7 @@ void MacroManagerPanel::renderActions() {
 
     // ── Action buttons ────────────────────────────────────────
     if (ImGui::Button(tr("btn.new"))) {
+        m_editIdx = -1;   // insert a brand-new macro
         m_creator.setMacroLibrary(m_macros);
         m_creator.open(MacroCreatorModal::Mode::kLibrary, "", "");
     }
@@ -162,6 +164,7 @@ void MacroManagerPanel::renderActions() {
     ImGui::SameLine();
     ImGui::BeginDisabled(!hasSel);
     if (ImGui::Button(tr("btn.edit"))) {
+        m_editIdx = m_selectedIdx;   // overwrite the selected macro
         m_creator.setMacroLibrary(m_macros);
         m_creator.open(MacroCreatorModal::Mode::kLibrary,
                        m_macros[m_selectedIdx].first,
@@ -172,6 +175,7 @@ void MacroManagerPanel::renderActions() {
     ImGui::SameLine();
     ImGui::BeginDisabled(!hasSel);
     if (ImGui::Button(tr("btn.copy"))) {
+        m_editIdx = -1;   // insert a copy, never touch the original
         m_creator.setMacroLibrary(m_macros);
         m_creator.open(MacroCreatorModal::Mode::kLibrary,
                        m_macros[m_selectedIdx].first + " Copy",
