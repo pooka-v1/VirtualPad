@@ -550,7 +550,7 @@ void MacroCreatorModal::renderActiveStepControls() {
     };
     int modeIdx = (int)m_repeatSpec.mode;
     ImGui::Text("%s", tr("macros.repeat_label")); ImGui::SameLine(0.0f, 4.0f);
-    ImGui::SetNextItemWidth(160.0f);
+    ImGui::SetNextItemWidth(150.0f);
     if (ImGui::Combo("##rmode", &modeIdx, kModeLabels, 5))
         m_repeatSpec.mode = (RepeatSpec::Mode)modeIdx;
 
@@ -575,6 +575,24 @@ void MacroCreatorModal::renderActiveStepControls() {
         m_repeatSpec.count = 0;
     if (!needN) ImGui::EndDisabled();
 
+    // Create repeat — sits right after the count field so it reads as the
+    // "apply" for the repeat row (mirrors "Add Wait" next to the wait field).
+    bool canRepeat = hasActive && m_repeatSpec.mode != RepeatSpec::Mode::None;
+    ImGui::SameLine(0.0f, 12.0f);
+    if (!canRepeat) ImGui::BeginDisabled();
+    if (ImGui::Button(tr("macros.btn_create_repeat")) && canRepeat) {
+        m_repeatWarn.clear();
+        // Validate required fields
+        if (m_repeatSpec.mode == RepeatSpec::Mode::Duration && m_repeatSpec.ms <= 0)
+            m_repeatWarn = tr("macros.err_ms_zero");
+        else if (m_repeatSpec.mode == RepeatSpec::Mode::CountInDuration
+                 && (m_repeatSpec.ms <= 0 || m_repeatSpec.count <= 0))
+            m_repeatWarn = (m_repeatSpec.ms <= 0) ? tr("macros.err_ms_zero") : tr("macros.err_n_zero");
+        else
+            createRepeat();
+    }
+    if (!canRepeat) ImGui::EndDisabled();
+
     if (!hasActive) ImGui::EndDisabled();
 
     // --- Row 3: Warning line (always occupies one line to avoid layout shifts) ---
@@ -587,7 +605,7 @@ void MacroCreatorModal::renderActiveStepControls() {
         ImGui::Dummy(ImVec2(1.0f, ImGui::GetTextLineHeight()));
     }
 
-    // --- Row 4: Delete / Clear all / Create repeat ---
+    // --- Row 4: Delete / Clear all ---
     ImGui::Spacing();
 
     // Delete
@@ -616,23 +634,6 @@ void MacroCreatorModal::renderActiveStepControls() {
         syncDslFromSteps();
     }
     if (!hasSteps) ImGui::EndDisabled();
-
-    // Create repeat (right-aligned)
-    bool canRepeat = hasActive && m_repeatSpec.mode != RepeatSpec::Mode::None;
-    ImGui::SameLine(0.0f, 24.0f);
-    if (!canRepeat) ImGui::BeginDisabled();
-    if (ImGui::Button(tr("macros.btn_create_repeat")) && canRepeat) {
-        m_repeatWarn.clear();
-        // Validate required fields
-        if (m_repeatSpec.mode == RepeatSpec::Mode::Duration && m_repeatSpec.ms <= 0)
-            m_repeatWarn = tr("macros.err_ms_zero");
-        else if (m_repeatSpec.mode == RepeatSpec::Mode::CountInDuration
-                 && (m_repeatSpec.ms <= 0 || m_repeatSpec.count <= 0))
-            m_repeatWarn = (m_repeatSpec.ms <= 0) ? tr("macros.err_ms_zero") : tr("macros.err_n_zero");
-        else
-            createRepeat();
-    }
-    if (!canRepeat) ImGui::EndDisabled();
 }
 
 // ---------------------------------------------------------------------------
@@ -759,7 +760,7 @@ bool MacroCreatorModal::render() {
 
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(680.0f, 0.0f));
+    ImGui::SetNextWindowSize(ImVec2(760.0f, 0.0f));
 
     if (!ImGui::BeginPopupModal(popupId, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         return false;

@@ -1,0 +1,110 @@
+{
+  "axis_actions": {
+    "left_x_neg": {
+      "ranges": [
+        {
+          "action": {
+            "virtual": "left_x_neg"
+          },
+          "from": 0.10000000149011612,
+          "to": 0.550000011920929
+        },
+        {
+          "action": {
+            "name": "RunLeft",
+            "type": "macro"
+          },
+          "from": 0.550000011920929,
+          "to": 1.0
+        }
+      ]
+    },
+    "left_x_pos": {
+      "ranges": [
+        {
+          "action": {
+            "virtual": "left_x_pos"
+          },
+          "from": 0.10000000149011612,
+          "to": 0.550000011920929
+        },
+        {
+          "action": {
+            "name": "RunRight",
+            "type": "macro"
+          },
+          "from": 0.550000011920929,
+          "to": 1.0
+        }
+      ]
+    },
+    "left_y_neg": {
+      "ranges": [
+        {
+          "action": {
+            "virtual": "left_y_neg"
+          },
+          "from": 0.10000000149011612,
+          "to": 0.550000011920929
+        },
+        {
+          "action": {
+            "name": "RunDown",
+            "type": "macro"
+          },
+          "from": 0.550000011920929,
+          "to": 1.0
+        }
+      ]
+    },
+    "left_y_pos": {
+      "ranges": [
+        {
+          "action": {
+            "virtual": "left_y_pos"
+          },
+          "from": 0.10000000149011612,
+          "to": 0.550000011920929
+        },
+        {
+          "action": {
+            "name": "RunUp",
+            "type": "macro"
+          },
+          "from": 0.550000011920929,
+          "to": 1.0
+        }
+      ]
+    },
+    "right_x_neg": {
+      "virtual": "right_x_neg"
+    },
+    "right_x_pos": {
+      "virtual": "right_x_pos"
+    },
+    "right_y_neg": {
+      "virtual": "right_y_neg"
+    },
+    "right_y_pos": {
+      "virtual": "right_y_pos"
+    }
+  },
+  "buttons": {
+    "a": {
+      "virtual": "x"
+    },
+    "b": {
+      "virtual": "a"
+    },
+    "y": {
+      "virtual": "b"
+    }
+  },
+  "dpad_remap": {
+    "down": "left_y_neg",
+    "left": "left_x_neg",
+    "right": "left_x_pos",
+    "up": "left_y_pos"
+  },
+  "profile_name": "Final Fantasy VII"
+}
