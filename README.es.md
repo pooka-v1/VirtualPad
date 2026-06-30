@@ -1,6 +1,7 @@
 # PadsWay
 
-Lee mandos físicos (HID) y los reenvía como un mando Xbox 360 virtual via ViGEm.
+Lee mandos físicos (HID) y los reenvía como un mando virtual vía ViGEm — bien un mando
+**Xbox 360** (XInput) o un **DualShock 4** (DirectInput), elegible en caliente.
 Soporta macros, bots y configuración por JSON sin tocar el código.
 
 [Read in English](README.md)
@@ -22,8 +23,93 @@ Soporta macros, bots y configuración por JSON sin tocar el código.
 
 ### Para compilar
 
-- Visual Studio 2022 (con soporte C++17 y Windows SDK)
-- El resto de dependencias están incluidas en el repositorio (`imgui/`, `nlohmann/`)
+- **Visual Studio 2022** (con soporte C++17 y Windows SDK).
+- El resto de dependencias están incluidas en el repositorio (`imgui/`, `nlohmann/`, `spdlog/`).
+- **Compila la configuración `Release | x64`.** `ViGEmClient.lib` es solo Release, así que una
+  build Debug no enlaza. Para depurar, ejecuta Release con F5 (genera el PDB).
+
+La salida es `x64\Release\PadsWay.exe`.
+
+### Ejecutar desde el código fuente (desarrollo)
+
+Por defecto PadsWay guarda su configuración y logs en `%LOCALAPPDATA%\PadsWay` (ver *Archivos de
+datos → Dónde se guardan estos archivos*). En desarrollo eso separa tus ajustes de la carpeta
+`data/` del propio proyecto. Para que todo se quede junto al directorio de trabajo, coloca ahí un
+**`portable.txt`** vacío — en un arranque con F5 desde Visual Studio ese directorio es la carpeta
+del proyecto (`PadsWay\`). Está en `.gitignore`, así que es un marcador local de desarrollo y
+nunca viaja en el paquete.
+
+### Generar una release (instalador + zip portable)
+
+Los distribuibles se generan con **`installer\package.ps1`**, que centraliza en un único sitio las
+reglas de "release limpia" (incluye los assets de fábrica y defaults seguros, y **nunca** tu
+`controllers.json` personal, perfiles ni macros):
+
+1. Compila la configuración `Release | x64` en Visual Studio.
+2. Desde la raíz del repo, ejecuta:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File installer\package.ps1
+   ```
+
+Esto deja en `dist\`:
+
+- `PadsWay-v<ver>-win64\` — la carpeta de staging portable,
+- `PadsWay-v<ver>-win64.zip` — la build portable,
+- `PadsWay-v<ver>-setup.exe` — el instalador de Inno Setup.
+
+El paso del instalador necesita [**Inno Setup 6**](https://jrsoftware.org/isdl.php); si `ISCC.exe`
+no está en la ruta por defecto, pasa `-Iscc <ruta>`. Otras opciones: `-Version 0.19` fija la
+versión de la release (sincronizada con el instalador), `-SkipZip` / `-SkipInstaller` generan solo una parte.
+
+---
+
+## Tipo de salida virtual — Xbox 360 o DualShock 4
+
+El mando virtual puede presentarse al sistema como uno de dos tipos:
+
+| Tipo | Protocolo | Ideal para |
+|---|---|---|
+| **Xbox (XInput)** | XInput | Mejor compatibilidad con juegos modernos. Es el valor por defecto. |
+| **DualShock (DirectInput)** | DirectInput | Juegos antiguos, emuladores y conseguir **más de 4 mandos** (XInput tiene un techo de 4). |
+
+Se elige en el combo junto al selector de perfil en la UI. Cambiarlo muestra un diálogo de
+confirmación y se aplica **en caliente**: el mando virtual se desconecta y reconecta al vuelo, así que
+**cierra cualquier juego abierto antes de cambiar** o perderá el mando.
+
+### Qué NO transmite la salida DualShock 4
+
+El DS4 virtual reproduce botones, sticks, cruceta, gatillos analógicos y el botón PS. Las
+funciones exclusivas de un DualShock 4 real están **deshabilitadas**:
+
+- el **touchpad** — tanto la superficie táctil (seguimiento XY del dedo) **como** el clic del touchpad,
+- el **giroscopio** y el acelerómetro (IMU).
+
+El modelo interno es siempre Xbox, así que no hay fuente para esos datos. En consecuencia, la vista
+del mando virtual DS4 muestra el touchpad y el giroscopio solo como decoración no asignable.
+(El adaptador de salida DS4 sí cablea el bit del clic del touchpad, pero nada lo alimenta y hoy no
+tiene uso — ver *Ideas*; solo importaría para un eventual emulador de PS4.)
+
+### Configuración — `data/virtualpad.json`
+
+El tipo elegido se persiste en `"output_type"`:
+
+```json
+{ "output_type": "xbox" }       // o "dualshock"
+```
+
+Valores aceptados (sin distinguir mayúsculas): `"xbox"` / `"xinput"` seleccionan la salida Xbox 360
+(también es el valor seguro por defecto ante cualquier valor desconocido o clave ausente);
+`"dualshock"` / `"ds4"` / `"dinput"` / `"directinput"` seleccionan la salida DualShock 4.
+
+Cada tipo tiene su propio VID/PID para que los juegos los distingan:
+
+| Clave | Por defecto | Identidad |
+|---|---|---|
+| `virtual_x_vid` / `virtual_x_pid` | `5650` / `0001` | Xbox 360 (ViGEm) |
+| `virtual_direct_vid` / `virtual_direct_pid` | `054C` / `05C4` | DualShock 4 v1 (Sony) |
+
+> Un VID Sony real exige un PID Sony real: `054C:05C4` (DualShock 4 v1) lo emula ViGEm de forma
+> nativa y no choca con un DS4 v2 físico (`054C:09CC`).
 
 ---
 
@@ -141,7 +227,7 @@ Usa el **Tab Scanner** de PadsWay para identificar qué número sale al pulsar c
 | `"r1"` | RB (bumper derecho) |
 | `"select"` | Back / Select |
 | `"start"` | Start |
-| `"home"` | Guide (no inyectable en Xbox 360 virtual) |
+| `"home"` | Guide en Xbox (no inyectable en Xbox 360 virtual) / botón PS en DualShock |
 | `"l3"` | Click stick izquierdo |
 | `"r3"` | Click stick derecho |
 
@@ -457,10 +543,32 @@ El asistente usa `state_map.json` para saber el nombre físico del botón (`phys
 | `data/controllers.json` | Configuración base de mandos físicos |
 | `data/profiles/` | Perfiles de juego — un JSON por juego |
 | `data/macros.json` | Biblioteca de macros reutilizables |
-| `data/virtualpad.json` | VID/PID del mando virtual, idioma, nivel de log y umbrales de stick |
+| `data/virtualpad.json` | Tipo de salida virtual y VID/PID por tipo, idioma, nivel de log y umbrales de stick (ver *Tipo de salida virtual*) |
 | `data/strings/strings_en.json` | Textos de la interfaz — inglés |
 | `data/strings/strings_es.json` | Textos de la interfaz — español |
 | `images/input_tokens/` | Iconos PNG para el creador de macros (24×24) |
+
+### Dónde se guardan estos archivos
+
+Los archivos que creas o editas — `controllers.json`, `profiles/`, `macros.json`,
+`pad_layouts.json`, `virtualpad.json` y la carpeta `logs/` — se guardan en una
+carpeta por usuario, para que la app funcione incluso instalada en una ubicación
+protegida como `Archivos de programa`:
+
+```
+%LOCALAPPDATA%\PadsWay\
+```
+
+(normalmente `C:\Users\<tú>\AppData\Local\PadsWay\`). En el primer arranque se
+copian ahí automáticamente las copias de fábrica que vienen junto al ejecutable,
+así empiezas con los layouts de mando incluidos. Los recursos de solo lectura que
+acompañan a la app (`data/strings/`, `data/state_map.json`, `images/`,
+`data/bots/`) permanecen junto al ejecutable y nunca se modifican.
+
+**Modo portable.** Coloca un archivo vacío llamado `portable.txt` junto a
+`PadsWay.exe` y la app guardará todo junto al ejecutable (el comportamiento
+anterior) — útil para ejecutarla desde un USB sin dejar rastro en el equipo. Sin
+él, se usa la ubicación por usuario de arriba.
 
 Ver [MACROS.md](MACROS.md) para la sintaxis completa de macros.
 

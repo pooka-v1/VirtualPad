@@ -1,5 +1,6 @@
 #include "AppWindow.h"
 #include "Log.h"
+#include "Paths.h"
 
 #include <algorithm>
 #include <fstream>
@@ -47,7 +48,7 @@ int AppWindow::run() {
 
     // Load virtualpad.json early to get font_size before ImGui font init.
     VirtualPadConfig vpCfgEarly;
-    try { vpCfgEarly = loadVirtualPadConfig("data/virtualpad.json"); } catch (...) {}
+    try { vpCfgEarly = loadVirtualPadConfig(Paths::userData("data/virtualpad.json")); } catch (...) {}
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -83,12 +84,12 @@ int AppWindow::run() {
     ImGui_ImplDX11_Init(m_device, m_context);
 
     try {
-        m_controllerConfigs = loadControllerConfigs("data/controllers.json");
+        m_controllerConfigs = loadControllerConfigs(Paths::userData("data/controllers.json"));
     } catch (...) {}   // tolerate a corrupt/unreadable controllers.json; start with none
 
     std::string locale = "en";
     try {
-        VirtualPadConfig vpCfg = loadVirtualPadConfig("data/virtualpad.json");
+        VirtualPadConfig vpCfg = loadVirtualPadConfig(Paths::userData("data/virtualpad.json"));
         m_acceptedXboxButtons  = vpCfg.acceptedXboxButtons;
         m_stickSelectThreshold = vpCfg.stickSelectThreshold;
         m_stickHoldMs          = vpCfg.stickHoldMs;
@@ -96,9 +97,9 @@ int AppWindow::run() {
     } catch (...) {}  // struct defaults apply if file is missing or malformed
     Strings::load(locale);
 
-    try { m_padLayouts = loadPadLayouts("data/pad_layouts.json"); } catch (...) {}
+    try { m_padLayouts = loadPadLayouts(Paths::userData("data/pad_layouts.json")); } catch (...) {}
     if (m_padLayouts.empty()) {
-        try { m_padLayouts = loadPadLayouts("data/pad_layouts.json.bak"); } catch (...) {}
+        try { m_padLayouts = loadPadLayouts(Paths::userData("data/pad_layouts.json.bak")); } catch (...) {}
         m_layoutsFromBackup = !m_padLayouts.empty();
     }
 
@@ -107,7 +108,7 @@ int AppWindow::run() {
 
     m_padView.load(m_device);
     m_virtualPadView.load(m_device);
-    m_layoutEditor.init(m_device, &m_padLayouts);
+    m_layoutEditor.init(m_device, &m_padLayouts, Paths::userData("data/pad_layouts.json"));
     m_mappingEditor.init(m_device, &m_engine, m_padLayouts,
                          m_acceptedXboxButtons, m_stickSelectThreshold, m_stickHoldMs);
     m_mappingEditor.setConfigs(m_controllerConfigs);
@@ -179,6 +180,29 @@ void AppWindow::renderFrame() {
         if (ImGui::BeginTabItem(tr("tab.pads")))    { renderPadsTab();    ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem(tr("tab.layout")))  { renderLayoutTab();  ImGui::EndTabItem(); }
         ImGui::EndTabBar();
+    }
+
+    // Output-type confirmation modal — drawn here at canvas level (NOT inside a tab)
+    // so BeginPopupModal is submitted every frame; a modal nested in a BeginTabItem can
+    // ghost-freeze the whole app if the tab stops emitting for a frame.
+    if (m_outputConfirmOpen && !ImGui::IsPopupOpen("output_switch_confirm"))
+        ImGui::OpenPopup("output_switch_confirm");
+    if (ImGui::BeginPopupModal("output_switch_confirm", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextWrapped("%s", tr("engine.output_warn"));
+        ImGui::Spacing();
+        if (ImGui::Button(tr("engine.output_confirm"), { 120.0f, 0.0f })) {
+            VirtualOutputType t = (m_pendingOutputSel == 1)
+                ? VirtualOutputType::DualShock : VirtualOutputType::Xbox;
+            m_engine.requestOutputType(t);   // the engine persists output_type only if the switch succeeds
+            m_outputConfirmOpen = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(tr("engine.output_cancel"), { 120.0f, 0.0f })) {
+            m_outputConfirmOpen = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
     }
 
     ImGui::End();
@@ -284,7 +308,7 @@ void AppWindow::renderEngineTab() {
     for (const auto& n : m_profileNames)
         profileItems.push_back(n.c_str());
 
-    ImGui::SetNextItemWidth(260.0f);
+    ImGui::SetNextItemWidth(220.0f);
     if (ImGui::Combo("##profile", &m_profileSelected, profileItems.data(), (int)profileItems.size())) {
         if (m_profileSelected == 0)
             m_engine.setProfilePath("");
@@ -292,12 +316,38 @@ void AppWindow::renderEngineTab() {
             m_engine.setProfilePath(m_profilePaths[m_profileSelected - 1]);
     }
 
+    // Output type selector continues on the SAME row as the profile selector.
+    ImGui::SameLine();
+
+    // ── Virtual output type selector (Xbox / DualShock), hot-swapped ─────────
+    // Picking a different type just raises m_outputConfirmOpen; the confirmation modal
+    // is drawn in renderFrame at canvas level (never inside this tab) so it is always
+    // submitted every frame and can't ghost-freeze the app.
+    ImGui::Text("%s", tr("engine.output_type"));
+    ImGui::SameLine();
+    const char* outputItems[] = { tr("engine.output_xbox"), tr("engine.output_ds4") };
+    int liveType = (m_engine.getOutputType() == VirtualOutputType::DualShock) ? 1 : 0;
+    // While confirming, show the user's pick; otherwise mirror the engine's live type.
+    int outputShown = m_outputConfirmOpen ? m_pendingOutputSel : liveType;
+    ImGui::SetNextItemWidth(220.0f);
+    if (ImGui::Combo("##outputtype", &outputShown, outputItems, 2)) {
+        m_pendingOutputSel  = outputShown;
+        m_outputConfirmOpen = (outputShown != liveType);  // nothing to confirm if back to current
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", tr("engine.output_tooltip"));
+
+    // Spinner while the engine tears down and rebuilds the virtual target.
+    if (m_engine.isOutputSwitchPending()) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", tr("engine.output_switching"));
+    }
+
+    // Status line under the selectors row: active profile / reconnect hint.
     std::string activeName = m_engine.getActiveProfileName();
     if (!activeName.empty()) {
-        ImGui::SameLine();
         ImGui::TextColored({ 0.4f, 0.9f, 0.4f, 1.0f }, tr("engine.profile_active"), activeName.c_str());
     } else if (connected && m_profileSelected != 0) {
-        ImGui::SameLine();
         ImGui::TextDisabled("%s", tr("engine.reconnect"));
     }
 
@@ -661,11 +711,24 @@ void AppWindow::renderScannerTab() {
 // ---------------------------------------------------------------------------
 
 bool AppWindow::initWindow() {
+    HINSTANCE hInst = GetModuleHandleW(nullptr);
+
+    // Load the app icon embedded via PadsWay.rc (ICON resource id 1) at both the
+    // large (Alt-Tab) and small (title-bar) sizes. The exe's embedded icon already
+    // drives the taskbar/Explorer, but the window's own title-bar icon is read from
+    // the window class — without this it falls back to the generic default.
+    HICON hIconBig = (HICON)LoadImageW(hInst, MAKEINTRESOURCEW(1), IMAGE_ICON,
+        GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_DEFAULTCOLOR);
+    HICON hIconSmall = (HICON)LoadImageW(hInst, MAKEINTRESOURCEW(1), IMAGE_ICON,
+        GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR);
+
     WNDCLASSEXW wc = {};
     wc.cbSize        = sizeof(wc);
     wc.style         = CS_CLASSDC;
     wc.lpfnWndProc   = WndProc;
-    wc.hInstance     = GetModuleHandle(nullptr);
+    wc.hInstance     = hInst;
+    wc.hIcon         = hIconBig;
+    wc.hIconSm       = hIconSmall;
     wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
     wc.lpszClassName = L"PadsWayWindow";
     RegisterClassExW(&wc);
@@ -729,10 +792,10 @@ void AppWindow::refreshProfileList() {
     m_profilePaths.clear();
     m_profileNames.clear();
     WIN32_FIND_DATAA fd = {};
-    HANDLE h = FindFirstFileA("data\\profiles\\*.json", &fd);
+    HANDLE h = FindFirstFileA(Paths::userData("data/profiles/*.json").c_str(), &fd);
     if (h != INVALID_HANDLE_VALUE) {
         do {
-            std::string path = "data/profiles/" + std::string(fd.cFileName);
+            std::string path = Paths::userData("data/profiles/") + std::string(fd.cFileName);
             try {
                 GameProfile p = loadGameProfile(path);
                 if (!p.profile_name.empty()) {
@@ -757,12 +820,17 @@ void AppWindow::renderPadsTab() {
             m_padView.forceSetLayout(*layout);
     }
 
-    // Virtual pad: always xbox_one, loaded once
-    if (!m_virtualPadInitialized) {
-        const PadLayout* vLayout = findLayout(m_padLayouts, "xbox_one");
+    // Virtual pad: layout follows the active output type (Xbox / DS4), reloaded on hot-swap.
+    // The internal model is always Xbox; the DS4 layout just renders the same state with PS
+    // glyphs (its components carry the Xbox "state" binding) and omits touch/gyro (not emitted).
+    const char* wantVirtualLayout =
+        (m_engine.getOutputType() == VirtualOutputType::DualShock)
+            ? "dualshock4_virtual" : "xbox_one";
+    if (m_currentVirtualLayoutId != wantVirtualLayout) {
+        const PadLayout* vLayout = findLayout(m_padLayouts, wantVirtualLayout);
         if (vLayout) {
             m_virtualPadView.setLayout(*vLayout);
-            m_virtualPadInitialized = true;
+            m_currentVirtualLayoutId = wantVirtualLayout;
         }
     }
 
@@ -886,7 +954,7 @@ void AppWindow::renderPadsTab() {
         if (!m_mappingEditor.isActive())
             m_engine.setEditorOpen(false);
         if (m_mappingEditor.pollConfigsSaved()) {
-            m_controllerConfigs = loadControllerConfigs("data/controllers.json");
+            m_controllerConfigs = loadControllerConfigs(Paths::userData("data/controllers.json"));
             m_mappingEditor.setConfigs(m_controllerConfigs);
         }
         if (m_mappingEditor.pollProfileListChanged()) {
@@ -919,14 +987,14 @@ void AppWindow::renderLayoutTab() {
     m_layoutEditor.render();
 
     if (m_layoutEditor.pollControllersSaved()) {
-        m_controllerConfigs = loadControllerConfigs("data/controllers.json");
+        m_controllerConfigs = loadControllerConfigs(Paths::userData("data/controllers.json"));
         m_engine.reloadConfigs();
         m_forceLayoutReload = true;
     }
 
     if (m_layoutEditor.pollLayoutSaved()) {
-        m_forceLayoutReload     = true;
-        m_virtualPadInitialized = false;
+        m_forceLayoutReload = true;
+        m_currentVirtualLayoutId.clear();   // force virtual layout reload next frame
     }
 }
 

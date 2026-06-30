@@ -1,0 +1,10 @@
+Presence of this file forces PadsWay into PORTABLE mode: it reads and writes
+all user data (controllers.json, profiles, macros, pad_layouts.json,
+virtualpad.json, logs) NEXT TO THE EXE instead of in %LOCALAPPDATA%\PadsWay.
+
+Here it keeps the in-IDE (F5) workflow writing into this project's own data/
+folder, exactly as before the LOCALAPPDATA change.
+
+This file is gitignored on purpose and must NEVER ship inside a release
+package — if it sat next to an installed exe under Program Files, the app would
+try to write there and fail, which is exactly the bug LOCALAPPDATA fixes.

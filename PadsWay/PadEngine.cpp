@@ -1,11 +1,13 @@
 #include "PadEngine.h"
 #include "Log.h"
+#include "Paths.h"
 
 #include <algorithm>
 #include <cmath>
 #include <memory>
 #include <optional>
 #include <windows.h>
+#include <timeapi.h>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
@@ -13,7 +15,9 @@
 
 #include "input/HIDScanner.h"
 #include "input/HIDInputSource.h"
-#include "output/ViGEmOutputAdapter.h"
+#include "output/IOutputSink.h"
+#include "output/ViGEmX360OutputAdapter.h"
+#include "output/ViGEmDs4OutputAdapter.h"
 #include "config/ConfigLoader.h"
 #include "bots/BotLoader.h"
 #include "macros/Macro.h"
@@ -23,6 +27,7 @@
 #pragma comment(lib, "Setupapi.lib")
 #pragma comment(lib, "cfgmgr32.lib")
 #pragma comment(lib, "hid.lib")
+#pragma comment(lib, "winmm.lib")   // timeBeginPeriod/timeEndPeriod (timer resolution, not input)
 
 
 // ---------------------------------------------------------------------------
@@ -284,7 +289,7 @@ float PadEngine::getMouseSpeed() const {
 
 void PadEngine::reloadConfigs() {
     try {
-        auto configs = loadControllerConfigs("data/controllers.json");
+        auto configs = loadControllerConfigs(Paths::userData("data/controllers.json"));
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             m_configs = std::move(configs);
@@ -355,6 +360,18 @@ void PadEngine::monitorFunc() {
 // ---------------------------------------------------------------------------
 
 void PadEngine::threadFunc() {
+    // Raise the Windows timer resolution to 1 ms for the lifetime of this thread.
+    // Without it, Sleep(8) in the forwarding loop rounds up to the OS default
+    // granularity (~15.6 ms) → the loop runs at ~64 Hz instead of ~125 Hz, the
+    // OS HID input buffer fills with stale reports and input lags by tenths of a
+    // second. (Previously this was set only as a side effect of LightningBot's
+    // thread, so removing the bot exposed the latent lag.) RAII guard so the
+    // matching timeEndPeriod runs on every exit path — early return or exception.
+    struct TimerResolutionGuard {
+        TimerResolutionGuard()  { timeBeginPeriod(1); }
+        ~TimerResolutionGuard() { timeEndPeriod(1);   }
+    } timerResolutionGuard;
+
     m_phase.store(EnginePhase::Scanning);
     setStatus("Scanning for devices...");
     spdlog::info("=== PadsWay — device init ===");
@@ -365,8 +382,8 @@ void PadEngine::threadFunc() {
     std::vector<ControllerConfig>    configs;
     std::vector<PhysicalController>  physCtrls;
     try {
-        configs   = loadControllerConfigs("data/controllers.json");
-        physCtrls = loadPhysicalControllers("data/controllers.json");
+        configs   = loadControllerConfigs(Paths::userData("data/controllers.json"));
+        physCtrls = loadPhysicalControllers(Paths::userData("data/controllers.json"));
         { std::lock_guard<std::mutex> lock(m_mutex); m_configs = configs; }
     } catch (const std::exception& ex) {
         spdlog::error("Error loading config: {}", ex.what());
@@ -378,7 +395,7 @@ void PadEngine::threadFunc() {
     // --- One-time init: macro library ---
     std::unordered_map<std::string, std::string> macroLibrary;
     try {
-        macroLibrary = loadMacroLibrary("data/macros.json");
+        macroLibrary = loadMacroLibrary(Paths::userData("data/macros.json"));
         if (!macroLibrary.empty())
             printf("Macro library loaded: %zu macros.\n", macroLibrary.size());
     } catch (const std::exception& ex) {
@@ -388,22 +405,84 @@ void PadEngine::threadFunc() {
     // --- One-time init: ViGEm (persists through device switches) ---
     VirtualPadConfig vpCfg;
     try {
-        vpCfg = loadVirtualPadConfig("data/virtualpad.json");
+        vpCfg = loadVirtualPadConfig(Paths::userData("data/virtualpad.json"));
     } catch (const std::exception& ex) {
         spdlog::warn("Could not load virtualpad.json: {} — using defaults.", ex.what());
     }
-    m_virtualVid.store(vpCfg.vid);
-    m_virtualPid.store(vpCfg.pid);
-    spdlog::debug("[PadEngine] Virtual pad identity: VID:{:04X} PID:{:04X}", vpCfg.vid, vpCfg.pid);
+    m_outputType.store(vpCfg.outputType);
 
     setStatus("Connecting to ViGEm...");
-    auto output = std::make_unique<ViGEmOutputAdapter>(vpCfg.vid, vpCfg.pid);
+    // Output port: the engine only knows IOutputSink; the concrete adapter is chosen
+    // here from the configured type. Each type advertises ITS OWN VID/PID pair, and we
+    // publish the active one into m_virtualVid/Pid so the scanner ignores our own
+    // virtual pad. Xbox = 5650:0001; DS4 = 054C:05C4 (DualShock 4 v1, a real DS4 id that
+    // ViGEm emulates natively), which doesn't clash with a physical DS4 v2 (054C:09CC).
+    //
+    // Persists output_type to disk, but ONLY when the engine actually applies a type (a
+    // successful hot-swap, or the startup Xbox fallback). The UI no longer persists on
+    // confirm, so a switch that fails to plug in can't leave a stale output_type behind.
+    auto persistOutputType = [](VirtualOutputType t) {
+        try { saveVirtualPadOutputType(Paths::userData("data/virtualpad.json"), t); }
+        catch (...) {}
+    };
+
+    std::unique_ptr<IOutputSink> output;
+    auto makeOutput = [&](VirtualOutputType type) -> std::unique_ptr<IOutputSink> {
+        if (type == VirtualOutputType::DualShock) {
+            spdlog::info("[PadEngine] Virtual output: DualShock 4 (DirectInput), id {:04X}:{:04X}.",
+                         vpCfg.directVid, vpCfg.directPid);
+            m_virtualVid.store(vpCfg.directVid);
+            m_virtualPid.store(vpCfg.directPid);
+            return std::make_unique<ViGEmDs4OutputAdapter>(vpCfg.directVid, vpCfg.directPid);
+        }
+        spdlog::info("[PadEngine] Virtual output: Xbox 360 (XInput), id {:04X}:{:04X}.",
+                     vpCfg.xboxVid, vpCfg.xboxPid);
+        m_virtualVid.store(vpCfg.xboxVid);
+        m_virtualPid.store(vpCfg.xboxPid);
+        return std::make_unique<ViGEmX360OutputAdapter>(vpCfg.xboxVid, vpCfg.xboxPid);
+    };
+    output = makeOutput(vpCfg.outputType);
+    if (!output->isReady() && vpCfg.outputType != VirtualOutputType::Xbox) {
+        // The configured type failed to plug in (transient ViGEm error, or a VID/PID the
+        // driver won't enumerate). Fall back to Xbox so the engine stays alive with a
+        // working virtual pad instead of dying — the user can retry the switch later.
+        spdlog::warn("[PadEngine] Configured output failed to plug in; falling back to Xbox.");
+        setStatus("Output failed — fell back to Xbox");
+        m_outputType.store(VirtualOutputType::Xbox);
+        output = makeOutput(VirtualOutputType::Xbox);
+        persistOutputType(VirtualOutputType::Xbox);   // correct the file so it won't retry DS4 next boot
+    }
     if (!output->isReady()) {
         spdlog::error("Aborting: could not create virtual pad.");
         setStatus("ViGEm error — is the driver installed?");
         m_running = false;
         return;
     }
+
+    // Output-type hot-swap: recreate the ViGEm target in place. Runs on the engine
+    // thread that OWNS `output`, so there is no orphan target and no data race. Any
+    // game using the old virtual pad will see it disconnect and a new one appear —
+    // that is why the UI warns the user to close games before switching.
+    auto applyPendingOutputSwitch = [&]() {
+        if (!m_outputSwitchPending.exchange(false)) return;
+        VirtualOutputType newType = m_pendingOutputType.load();
+        spdlog::info("[PadEngine] Hot-swapping virtual output type...");
+        const VirtualOutputType prevType = m_outputType.load();
+        output.reset();                 // RAII destructor calls vigem_target_remove on the old target
+        output = makeOutput(newType);   // rebuilds the adapter and republishes the active VID/PID
+        if (output->isReady()) {
+            m_outputType.store(newType);
+            persistOutputType(newType);   // only persist a switch that actually plugged in
+        } else {
+            // New target rejected (transient ViGEm error or a VID/PID it won't enumerate).
+            // Roll back to the previous WORKING type so the user is never left without a
+            // virtual pad nor stuck on "switching...".
+            spdlog::error("[PadEngine] Output switch failed; rolling back to previous type.");
+            setStatus("Output switch failed — kept previous type");
+            output.reset();
+            output = makeOutput(prevType);
+        }
+    };
 
     // preSelected: set when a hot-switch is requested; skips the scan loop on next iteration.
     DeviceCandidate preSelected;
@@ -429,11 +508,13 @@ void PadEngine::threadFunc() {
             while (m_running && selected.vid == 0) {
                 // Pick up any config updates written by the BindingWizard
                 { std::lock_guard<std::mutex> lock(m_mutex); configs = m_configs; }
+                applyPendingOutputSwitch();   // honour an output switch even with no device connected
                 auto hidEntries = HIDScanner::scan();
 
                 std::vector<DeviceCandidate> allCandidates;
                 for (auto& h : hidEntries) {
-                    if (vpCfg.vid && h.vid == vpCfg.vid && h.pid == vpCfg.pid) continue;
+                    const uint16_t vVid = m_virtualVid.load(), vPid = m_virtualPid.load();
+                    if (vVid && h.vid == vVid && h.pid == vPid) continue;
                     const ControllerConfig* c = findConfig(configs, h.vid, h.pid, h.connectionType, "", h.productName);
                     if (!c || c->mode != "hid") {
                         spdlog::debug("[Scan] No config: VID={:04X} PID={:04X} conn='{}' name='{}'",
@@ -472,8 +553,10 @@ void PadEngine::threadFunc() {
                     m_phase.store(EnginePhase::WaitingSelection);
                     setStatus("Multiple controllers detected — select one in the Engine tab");
 
-                    while (m_running && m_selectedIndex.load() < 0)
+                    while (m_running && m_selectedIndex.load() < 0) {
+                        applyPendingOutputSwitch();
                         Sleep(50);
+                    }
 
                     if (!m_running) return;
 
@@ -854,6 +937,7 @@ void PadEngine::threadFunc() {
     int          reconnectTries    = 0;
 
     while (m_running && !m_switchPending.load()) {
+        applyPendingOutputSwitch();   // recreate the virtual target if the UI asked to
         // Profile hot-swap: detect change or explicit reload request.
         std::string newProfile = getProfilePath();
         if (newProfile != currentProfilePath || m_profileDirty.exchange(false)) {
@@ -908,7 +992,7 @@ void PadEngine::threadFunc() {
         // Macro library hot-reload: pick up macros.json changes saved by the macro manager.
         if (m_macroLibDirty.exchange(false)) {
             try {
-                macroLibrary = loadMacroLibrary("data/macros.json");
+                macroLibrary = loadMacroLibrary(Paths::userData("data/macros.json"));
                 spdlog::info("Macro library reloaded: {} macros.", macroLibrary.size());
             } catch (const std::exception& ex) {
                 spdlog::warn("Macro library reload failed: {}", ex.what());
@@ -934,7 +1018,7 @@ void PadEngine::threadFunc() {
 
                 // Re-inject PhysicalController so the component system picks up mapping changes.
                 try {
-                    physCtrls = loadPhysicalControllers("data/controllers.json");
+                    physCtrls = loadPhysicalControllers(Paths::userData("data/controllers.json"));
                     auto it = std::find_if(physCtrls.begin(), physCtrls.end(),
                         [&](const PhysicalController& pc) {
                             return pc.vid == selected.vid && pc.pid == selected.pid;
